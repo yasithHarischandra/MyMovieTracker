@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Personal Media Tracker – System Design</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0d0f14;--surface:#141720;--surface2:#1c2030;--border:#2a2f45;--accent:#6c63ff;--accent2:#f59e0b;--accent3:#10b981;--accent4:#ef4444;--text:#e2e8f0;--text-muted:#8892a4;--blue:#3b82f6;--purple:#8b5cf6;--pink:#ec4899;--teal:#14b8a6}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);line-height:1.6;font-size:15px}
+  header{background:linear-gradient(135deg,#1a1040 0%,#0d1830 50%,#0d0f14 100%);padding:60px 40px;text-align:center;border-bottom:1px solid var(--border);position:relative;overflow:hidden}
+  header::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 30% 50%,rgba(108,99,255,.15),transparent 60%),radial-gradient(ellipse at 70% 50%,rgba(245,158,11,.1),transparent 60%)}
+  header h1{font-size:2.8rem;font-weight:800;letter-spacing:-1px;background:linear-gradient(135deg,#a78bfa,#6c63ff,#38bdf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px;position:relative}
+  header .sub{font-size:1.1rem;color:var(--text-muted);position:relative}
+  header .badge{display:inline-flex;gap:10px;margin-top:20px;position:relative;flex-wrap:wrap;justify-content:center}
+  header .badge span{background:rgba(108,99,255,.2);border:1px solid rgba(108,99,255,.4);padding:4px 14px;border-radius:20px;font-size:.8rem;color:#a78bfa}
+  .container{max-width:1200px;margin:0 auto;padding:0 24px}
+  section{padding:48px 0}
+  section+section{border-top:1px solid var(--border)}
+  .section-header{display:flex;align-items:center;gap:14px;margin-bottom:32px}
+  .section-num{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--purple));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.85rem;flex-shrink:0}
+  .section-title{font-size:1.55rem;font-weight:700}
+  .section-desc{color:var(--text-muted);margin-top:4px;font-size:.9rem}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px}
+  .card-grid{display:grid;gap:16px}
+  .card-grid.cols-2{grid-template-columns:repeat(2,1fr)}
+  .card-grid.cols-3{grid-template-columns:repeat(3,1fr)}
+  .card-grid.cols-4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:900px){.card-grid.cols-4,.card-grid.cols-3{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:600px){.card-grid.cols-2,.card-grid.cols-3,.card-grid.cols-4{grid-template-columns:1fr}}
+  .card h3{font-size:.95rem;font-weight:600;margin-bottom:8px}
+  .card p{font-size:.85rem;color:var(--text-muted)}
+  .card .icon{font-size:1.6rem;margin-bottom:10px}
+  .card.highlight{border-color:var(--accent);background:rgba(108,99,255,.07)}
+  .card.green{border-color:var(--accent3);background:rgba(16,185,129,.07)}
+  .card.amber{border-color:var(--accent2);background:rgba(245,158,11,.07)}
+  .card.blue{border-color:var(--blue);background:rgba(59,130,246,.07)}
+  .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .tag{padding:3px 10px;border-radius:12px;font-size:.75rem;font-weight:500}
+  .tag.purple{background:rgba(139,92,246,.25);color:#c4b5fd;border:1px solid rgba(139,92,246,.3)}
+  .tag.green{background:rgba(16,185,129,.2);color:#6ee7b7;border:1px solid rgba(16,185,129,.3)}
+  .tag.amber{background:rgba(245,158,11,.2);color:#fcd34d;border:1px solid rgba(245,158,11,.3)}
+  .tag.blue{background:rgba(59,130,246,.2);color:#93c5fd;border:1px solid rgba(59,130,246,.3)}
+  .tag.pink{background:rgba(236,72,153,.2);color:#f9a8d4;border:1px solid rgba(236,72,153,.3)}
+  .tag.teal{background:rgba(20,184,166,.2);color:#99f6e4;border:1px solid rgba(20,184,166,.3)}
+  .mermaid-wrap{background:var(--surface2);border:1px solid var(--border);border-radius:16px;padding:24px;overflow-x:auto;margin-bottom:16px}
+  .mermaid-title{font-size:.8rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.08em;margin-bottom:16px}
+  .stack-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+  .stack-item{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 16px;display:flex;align-items:center;gap:10px;font-size:.83rem;font-weight:500}
+  .stack-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+  .schema-table{width:100%;border-collapse:collapse;font-size:.82rem}
+  .schema-table th{background:var(--surface2);color:var(--text-muted);font-weight:600;padding:10px 14px;text-align:left;font-size:.75rem;text-transform:uppercase;letter-spacing:.06em}
+  .schema-table td{padding:9px 14px;border-top:1px solid var(--border)}
+  .schema-table tr:hover td{background:rgba(255,255,255,.02)}
+  .route-list{display:flex;flex-direction:column;gap:8px}
+  .route{display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:.82rem;flex-wrap:wrap}
+  .method{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:.73rem;padding:2px 8px;border-radius:4px;min-width:52px;text-align:center}
+  .method.get{background:rgba(16,185,129,.25);color:#34d399}
+  .method.post{background:rgba(59,130,246,.25);color:#60a5fa}
+  .method.delete{background:rgba(239,68,68,.25);color:#f87171}
+  .route-path{font-family:'JetBrains Mono',monospace;color:#c4b5fd;font-size:.8rem}
+  .route-desc{color:var(--text-muted);margin-left:auto;font-size:.76rem}
+  .timeline{position:relative;padding-left:36px}
+  .timeline::before{content:'';position:absolute;left:10px;top:8px;bottom:8px;width:2px;background:linear-gradient(to bottom,var(--accent),var(--accent3))}
+  .tl-item{position:relative;margin-bottom:24px}
+  .tl-dot{position:absolute;left:-30px;top:4px;width:14px;height:14px;border-radius:50%;background:var(--accent);border:2px solid var(--bg);z-index:1;box-shadow:0 0 8px rgba(108,99,255,.6)}
+  .tl-item h4{font-size:.88rem;font-weight:600;margin-bottom:4px}
+  .tl-item p{font-size:.82rem;color:var(--text-muted)}
+  .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  @media(max-width:700px){.stat-row{grid-template-columns:repeat(2,1fr)}}
+  .stat-card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:18px;text-align:center}
+  .stat-val{font-size:1.8rem;font-weight:800;line-height:1}
+  .stat-label{font-size:.78rem;color:var(--text-muted);margin-top:6px}
+  footer{padding:32px 24px;text-align:center;color:var(--text-muted);font-size:.82rem;border-top:1px solid var(--border)}
+  code{font-family:'JetBrains Mono',monospace;font-size:.82em;color:#7dd3fc;background:rgba(59,130,246,.1);padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<header>
+  <div class="container">
+    <h1>🎬 Personal Media Tracker</h1>
+    <p class="sub">System Design Document &nbsp;·&nbsp; v1.0 &nbsp;·&nbsp; 2026-03-28</p>
+    <div class="badge">
+      <span>FastAPI</span><span>Vue 3</span><span>SQLite + SQLAlchemy</span><span>APScheduler</span><span>Docker + Nginx</span><span>TMDB API</span>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+<!-- 1. OVERVIEW -->
+<section>
+  <div class="section-header">
+    <div class="section-num">1</div>
+    <div><div class="section-title">Project Overview</div><div class="section-desc">A personal, self-hosted media tracking app to replace Trakt.tv</div></div>
+  </div>
+  <div class="card-grid cols-4">
+    <div class="card highlight"><div class="icon">🔐</div><h3>Auth-Gated</h3><p>JWT login from day one. Single admin user; multi-user extensible via <code>user_id</code> FK already on all data tables.</p></div>
+    <div class="card green"><div class="icon">🎞️</div><h3>Movies & TV</h3><p>Track movies and episodic TV. Mark individual episodes or full seasons watched in one action.</p></div>
+    <div class="card amber"><div class="icon">📊</div><h3>Rich Stats</h3><p>Global stats + per-series progress. Date-range history page. Hours remaining per in-progress queue.</p></div>
+    <div class="card blue"><div class="icon">🔄</div><h3>Auto-Sync</h3><p>APScheduler syncs new episodes for returning shows twice weekly. Fully containerised, no external cron needed.</p></div>
+  </div>
+</section>
+
+<!-- 2. ARCHITECTURE -->
+<section>
+  <div class="section-header">
+    <div class="section-num">2</div>
+    <div><div class="section-title">System Architecture</div><div class="section-desc">How all components interact on the VPS</div></div>
+  </div>
+  <div class="mermaid-wrap">
+    <div class="mermaid-title">Component Interaction Diagram</div>
+    <div class="mermaid">
+graph LR
+  Browser["🌐 Browser\n(Vue 3 SPA)"]
+  subgraph VPS ["Linux VPS (Host)"]
+    Nginx["⚡ Nginx\nReverse Proxy + Static\nSSL via Certbot"]
+    subgraph Docker ["Docker Container · port 8020"]
+      FastAPI["🐍 FastAPI\n(uvicorn)"]
+      APSched["⏱ APScheduler\n(in-process)"]
+      SQLite["🗄 SQLite\n/data/mediatracker.db"]
+    end
+    Volume["📦 Docker Volume"]
+  end
+  TMDB["☁️ TMDB API v3"]
+  Browser -->|"HTTPS 443"| Nginx
+  Nginx -->|"/api/* proxy"| FastAPI
+  Nginx -->|"/ static dist"| Browser
+  FastAPI <-->|"SQLAlchemy async"| SQLite
+  SQLite --- Volume
+  APSched -->|"Tue/Fri 02:00 UTC"| TMDB
+  FastAPI -->|"On-demand search"| TMDB
+style VPS fill:#1c2030,stroke:#2a2f45,color:#e2e8f0
+style Docker fill:#141720,stroke:#6c63ff,color:#e2e8f0
+style Nginx fill:#1a3050,stroke:#3b82f6,color:#93c5fd
+style FastAPI fill:#1a1040,stroke:#8b5cf6,color:#c4b5fd
+style APSched fill:#1a1a10,stroke:#f59e0b,color:#fcd34d
+style SQLite fill:#102030,stroke:#10b981,color:#6ee7b7
+style Volume fill:#1a1a1a,stroke:#374151,color:#9ca3af
+style Browser fill:#0d1830,stroke:#38bdf8,color:#7dd3fc
+style TMDB fill:#0d2010,stroke:#10b981,color:#6ee7b7
+    </div>
+  </div>
+  <div class="mermaid-wrap">
+    <div class="mermaid-title">Request Flow — Marking an Episode Watched</div>
+    <div class="mermaid">
+sequenceDiagram
+  actor U as User
+  participant V as Vue 3 SPA
+  participant N as Nginx
+  participant A as FastAPI
+  participant D as SQLite
+  U->>V: Click "Mark Watched"
+  V->>N: POST /api/shows/{id}/episodes/{ep_id}/watch + Bearer JWT
+  N->>A: Forward request
+  A->>A: Validate JWT → extract user_id
+  A->>D: INSERT watch_history (user_id, episode_id, watched_at, rating, note)
+  D-->>A: OK
+  A->>D: SELECT remaining episodes for show
+  D-->>A: remaining_count
+  A-->>V: {success, remaining_episodes, is_complete}
+  V-->>U: Update progress bar, toast notification
+    </div>
+  </div>
+</section>
+
+<!-- 3. TECH STACK -->
+<section>
+  <div class="section-header">
+    <div class="section-num">3</div>
+    <div><div class="section-title">Technology Stack</div><div class="section-desc">Lightweight, async-first, PostgreSQL-ready</div></div>
+  </div>
+  <div class="card-grid cols-2">
+    <div class="card">
+      <h3 style="margin-bottom:14px;color:#c4b5fd">⚙️ Backend</h3>
+      <div class="stack-row">
+        <div class="stack-item"><span class="stack-dot" style="background:#a78bfa"></span>Python 3.12</div>
+        <div class="stack-item"><span class="stack-dot" style="background:#6c63ff"></span>FastAPI</div>
+        <div class="stack-item"><span class="stack-dot" style="background:#10b981"></span>SQLAlchemy 2.x async</div>
+        <div class="stack-item"><span class="stack-dot" style="background:#14b8a6"></span>aiosqlite</div>
+        <div class="stack-item"><span class="stack-dot" style="background:#f59e0b"></span>Alembic (migrations)</div>
+        <div class="stack-item"><span class="stack-dot" style="background:#ef4444"></span>python-jose (JWT)</div>
+        <div class="stack-item"><span class="stack-dot" style="background:#ec4899"></span>passlib[bcrypt]</div>
+        <div class="stack-item"><span class="stack-dot" style="background:#f97316"></span>APScheduler 3.x</div>
+        <div class="stack-item"><span class="stack-dot" style="background:#3b82f6"></span>httpx (TMDB client)</div>
+        <div class="stack-item"><span class="stack-dot" style="background:#64748b"></span>uvicorn</div>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="margin-bottom:14px;color:#7dd3fc">🎨 Frontend</h3>
+      <div class="stack-row">
+        <div class="stack-item"><span class="stack-dot" style="background:#42b883"></span>Vue 3 (Composition API)</div>
+        <div class="stack-item"><span class="stack-dot" style="background:#f59e0b"></span>Vite 5</div>
+        <div class="stack-item"><span class="stack-dot" style="background:#06b6d4"></span>Tailwind CSS v3</div>
+        <div class="stack-item"><span class="stack-dot" style="background:#8b5cf6"></span>Pinia (state)</div>
+        <div class="stack-item"><span class="stack-dot" style="background:#3b82f6"></span>Vue Router 4</div>
+        <div class="stack-item"><span class="stack-dot" style="background:#ec4899"></span>Axios + JWT interceptor</div>
+        <div class="stack-item"><span class="stack-dot" style="background:#10b981"></span>Chart.js (stats)</div>
+      </div>
+      <h3 style="margin-bottom:14px;margin-top:20px;color:#6ee7b7">🏗️ Infrastructure</h3>
+      <div class="stack-row">
+        <div class="stack-item"><span class="stack-dot" style="background:#2496ed"></span>Docker</div>
+        <div class="stack-item"><span class="stack-dot" style="background:#009639"></span>Nginx (host)</div>
+        <div class="stack-item"><span class="stack-dot" style="background:#f97316"></span>Certbot / Let's Encrypt</div>
+        <div class="stack-item"><span class="stack-dot" style="background:#01b4e4"></span>TMDB API v3 + CDN</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 4. DATABASE SCHEMA -->
+<section>
+  <div class="section-header">
+    <div class="section-num">4</div>
+    <div><div class="section-title">Database Schema</div><div class="section-desc">SQLite via SQLAlchemy async. Alembic migrations from day one. PostgreSQL-ready — change one env var.</div></div>
+  </div>
+  <div class="mermaid-wrap">
+    <div class="mermaid-title">Entity Relationship Diagram</div>
+    <div class="mermaid">
+erDiagram
+  USERS { int id PK; string username; string hashed_password; datetime created_at }
+  MOVIES { int id PK; int tmdb_id; int user_id FK; string title; string overview; date release_date; int runtime_mins; string genres; string poster_path; datetime added_at }
+  TV_SHOWS { int id PK; int tmdb_id; int user_id FK; string name; string overview; date first_air_date; string genres; string status; string poster_path; datetime added_at; datetime last_synced_at }
+  SEASONS { int id PK; int show_id FK; int season_number; string name; int episode_count; date air_date }
+  EPISODES { int id PK; int season_id FK; int episode_number; string name; int runtime_mins; date air_date }
+  WATCH_HISTORY { int id PK; int user_id FK; int movie_id FK; int episode_id FK; datetime watched_at; int rating; text note }
+  USERS ||--o{ MOVIES : owns
+  USERS ||--o{ TV_SHOWS : owns
+  USERS ||--o{ WATCH_HISTORY : logs
+  MOVIES ||--o{ WATCH_HISTORY : in
+  TV_SHOWS ||--o{ SEASONS : has
+  SEASONS ||--o{ EPISODES : contains
+  EPISODES ||--o{ WATCH_HISTORY : in
+    </div>
+  </div>
+  <div class="card-grid cols-2">
+    <div class="card">
+      <h3 style="margin-bottom:14px">📋 watch_history Design Notes</h3>
+      <div class="timeline" style="margin-top:8px">
+        <div class="tl-item"><div class="tl-dot"></div><h4>Append-only ledger</h4><p>Every "Mark Watched" inserts a new row with <code>watched_at</code> timestamp. Full history is preserved.</p></div>
+        <div class="tl-item"><div class="tl-dot" style="background:var(--accent3)"></div><h4>Unwatch = DELETE row</h4><p>Removing a watch event deletes the specific history row. The movie/episode stays in the library.</p></div>
+        <div class="tl-item"><div class="tl-dot" style="background:var(--accent2)"></div><h4>Mutual exclusivity</h4><p>Either <code>movie_id</code> OR <code>episode_id</code> is set per row — never both. Enforced at the API layer.</p></div>
+        <div class="tl-item"><div class="tl-dot" style="background:var(--pink)"></div><h4>Optional rating &amp; note</h4><p>Rating (1–5 INT nullable) and note (TEXT nullable). Only saved when user provides them.</p></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="margin-bottom:14px">🔢 Stats Query Strategy</h3>
+      <table class="schema-table">
+        <thead><tr><th>Stat</th><th>Approach</th></tr></thead>
+        <tbody>
+          <tr><td>Movies watched</td><td>COUNT DISTINCT movie_id WHERE movie_id IS NOT NULL</td></tr>
+          <tr><td>Total movie hours</td><td>SUM(movies.runtime_mins)/60 via JOIN</td></tr>
+          <tr><td>Episodes watched</td><td>COUNT DISTINCT episode_id WHERE episode_id IS NOT NULL</td></tr>
+          <tr><td>Total TV hours</td><td>SUM(episodes.runtime_mins)/60 via JOIN</td></tr>
+          <tr><td>In-progress series</td><td>Shows with ≥1 watched episode AND remaining episodes &gt; 0</td></tr>
+          <tr><td>Hours remaining</td><td>SUM(unwatched episode runtime_mins)/60</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 5. API ENDPOINTS -->
+<section>
+  <div class="section-header">
+    <div class="section-num">5</div>
+    <div><div class="section-title">API Endpoint Map</div><div class="section-desc">All routes protected by JWT Bearer token except <code>POST /api/auth/token</code></div></div>
+  </div>
+  <div class="card-grid cols-2">
+    <div class="card">
+      <h3 style="margin-bottom:12px;color:#60a5fa">🔐 Auth</h3>
+      <div class="route-list">
+        <div class="route"><span class="method post">POST</span><span class="route-path">/api/auth/token</span><span class="route-desc">Login → JWT</span></div>
+        <div class="route"><span class="method get">GET</span><span class="route-path">/api/auth/me</span><span class="route-desc">Current user</span></div>
+      </div>
+      <h3 style="margin-bottom:12px;margin-top:18px;color:#60a5fa">🔍 Search (TMDB passthrough)</h3>
+      <div class="route-list">
+        <div class="route"><span class="method get">GET</span><span class="route-path">/api/search/movies</span><span class="route-desc">?q=…</span></div>
+        <div class="route"><span class="method get">GET</span><span class="route-path">/api/search/shows</span><span class="route-desc">?q=…</span></div>
+      </div>
+      <h3 style="margin-bottom:12px;margin-top:18px;color:#60a5fa">🎬 Movies</h3>
+      <div class="route-list">
+        <div class="route"><span class="method post">POST</span><span class="route-path">/api/movies</span><span class="route-desc">Add from TMDB</span></div>
+        <div class="route"><span class="method get">GET</span><span class="route-path">/api/movies/{id}</span><span class="route-desc">Detail + watch history</span></div>
+        <div class="route"><span class="method post">POST</span><span class="route-path">/api/movies/{id}/watch</span><span class="route-desc">Mark watched</span></div>
+        <div class="route"><span class="method delete">DEL</span><span class="route-path">/api/movies/watch/{wh_id}</span><span class="route-desc">Unwatch</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="margin-bottom:12px;color:#a78bfa">📺 TV Shows</h3>
+      <div class="route-list">
+        <div class="route"><span class="method post">POST</span><span class="route-path">/api/shows</span><span class="route-desc">Add from TMDB</span></div>
+        <div class="route"><span class="method get">GET</span><span class="route-path">/api/shows/{id}</span><span class="route-desc">Detail + seasons</span></div>
+        <div class="route"><span class="method post">POST</span><span class="route-path">/api/shows/{id}/episodes/{ep_id}/watch</span><span class="route-desc">Mark episode watched</span></div>
+        <div class="route"><span class="method post">POST</span><span class="route-path">/api/shows/{id}/seasons/{s}/watch</span><span class="route-desc">Mark season watched</span></div>
+        <div class="route"><span class="method delete">DEL</span><span class="route-path">/api/shows/episodes/watch/{wh_id}</span><span class="route-desc">Unwatch episode</span></div>
+      </div>
+      <h3 style="margin-bottom:12px;margin-top:18px;color:#a78bfa">📊 Dashboard & Stats</h3>
+      <div class="route-list">
+        <div class="route"><span class="method get">GET</span><span class="route-path">/api/dashboard</span><span class="route-desc">Stats + recent history</span></div>
+        <div class="route"><span class="method get">GET</span><span class="route-path">/api/in-progress</span><span class="route-desc">In-progress series</span></div>
+        <div class="route"><span class="method get">GET</span><span class="route-path">/api/history</span><span class="route-desc">?from=&amp;to= date range</span></div>
+        <div class="route"><span class="method get">GET</span><span class="route-path">/api/stats</span><span class="route-desc">?from=&amp;to= period stats</span></div>
+        <div class="route"><span class="method post">POST</span><span class="route-path">/api/admin/sync</span><span class="route-desc">Manual TMDB sync</span></div>
+        <div class="route"><span class="method post">POST</span><span class="route-path">/api/import/trakt</span><span class="route-desc">Trakt JSON import</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6. AUTH FLOW -->
+<section>
+  <div class="section-header">
+    <div class="section-num">6</div>
+    <div><div class="section-title">Authentication Flow</div><div class="section-desc">JWT Bearer tokens. 30-day expiry for personal-use convenience. No public registration.</div></div>
+  </div>
+  <div class="mermaid-wrap">
+    <div class="mermaid-title">Auth Sequence (Setup + Login)</div>
+    <div class="mermaid">
+sequenceDiagram
+  actor A as Admin (first run)
+  participant S as create_user.py CLI
+  participant D as SQLite
+  participant V as Vue SPA
+  participant API as FastAPI /auth/token
+  Note over A,D: One-time setup at deployment
+  A->>S: python create_user.py --username admin --password "..."
+  S->>D: INSERT users (username, bcrypt_hash)
+  D-->>S: OK
+  Note over V,API: Every subsequent login
+  V->>API: POST /api/auth/token {username, password}
+  API->>D: SELECT user WHERE username=?
+  D-->>API: user row
+  API->>API: bcrypt.verify(password, hash)
+  API-->>V: {access_token, token_type:"bearer"}
+  V->>V: Store in localStorage
+  V->>API: All calls: Authorization: Bearer token
+    </div>
+  </div>
+</section>
+
+<!-- 7. BACKGROUND SYNC -->
+<section>
+  <div class="section-header">
+    <div class="section-num">7</div>
+    <div><div class="section-title">Background Sync — APScheduler</div><div class="section-desc">In-process scheduler. No Redis, no cron, fully containerised.</div></div>
+  </div>
+  <div class="card-grid cols-2">
+    <div class="card amber">
+      <h3>⏱ Configuration</h3>
+      <div style="margin-top:14px;font-size:.85rem;display:flex;flex-direction:column;gap:8px">
+        <p><strong>Type:</strong> AsyncIOScheduler (APScheduler 3.x)</p>
+        <p><strong>Schedule:</strong> Cron — Tuesday &amp; Friday, 02:00 UTC</p>
+        <p><strong>Lifecycle:</strong> Started on FastAPI <code>startup</code>, stopped on <code>shutdown</code></p>
+        <p><strong>Manual trigger:</strong> POST /api/admin/sync</p>
+        <p><strong>Missed run on restart:</strong> Harmless — sync will run at next scheduled time</p>
+      </div>
+    </div>
+    <div class="card">
+      <h3>🔄 Sync Job Steps</h3>
+      <div class="timeline" style="margin-top:12px">
+        <div class="tl-item"><div class="tl-dot" style="background:var(--accent2)"></div><h4>Query DB</h4><p>SELECT all tv_shows WHERE status = "Returning Series"</p></div>
+        <div class="tl-item"><div class="tl-dot" style="background:var(--accent2)"></div><h4>Fetch TMDB</h4><p>GET /tv/{tmdb_id} and new season details for each show</p></div>
+        <div class="tl-item"><div class="tl-dot" style="background:var(--accent2)"></div><h4>Upsert Seasons &amp; Episodes</h4><p>INSERT new seasons/episodes; update show status if Ended</p></div>
+        <div class="tl-item"><div class="tl-dot" style="background:var(--accent3)"></div><h4>Timestamp</h4><p>UPDATE tv_shows SET last_synced_at = NOW()</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 8. FRONTEND PAGES -->
+<section>
+  <div class="section-header">
+    <div class="section-num">8</div>
+    <div><div class="section-title">Frontend Pages & Navigation</div><div class="section-desc">Vue 3 SPA. Dark-mode-first, cinematic aesthetic.</div></div>
+  </div>
+  <div class="mermaid-wrap">
+    <div class="mermaid-title">Page Routing Map</div>
+    <div class="mermaid">
+graph TD
+  L["/login — Login Page"]
+  H["/ — Dashboard\nRecent history + global stats"]
+  S["/search — Search\nAdd movies & shows to library"]
+  IP["/in-progress — In Progress\nReturning series with remaining episodes"]
+  Hi["/history — History\nDate-range feed + period stats"]
+  MD["/movies/:id — Movie Detail\nMetadata, mark watched, rating, note"]
+  SD["/shows/:id — Show Detail\nSeasons, episodes, progress"]
+  L-->H
+  H-->S
+  H-->IP
+  H-->Hi
+  H-->MD
+  H-->SD
+style L fill:#1a1040,stroke:#8b5cf6,color:#c4b5fd
+style H fill:#1a3050,stroke:#3b82f6,color:#93c5fd
+style S fill:#0d2010,stroke:#10b981,color:#6ee7b7
+style IP fill:#1a1a10,stroke:#f59e0b,color:#fcd34d
+style Hi fill:#101a2a,stroke:#14b8a6,color:#99f6e4
+style MD fill:#1a1040,stroke:#a78bfa,color:#ddd6fe
+style SD fill:#1a1040,stroke:#ec4899,color:#f9a8d4
+    </div>
+  </div>
+  <div class="card-grid cols-3">
+    <div class="card highlight"><div class="icon">🏠</div><h3>Dashboard</h3><div class="tags"><span class="tag purple">4 KPI stats bar</span><span class="tag blue">Recent activity feed</span><span class="tag teal">In-progress widget</span></div></div>
+    <div class="card"><div class="icon">🔍</div><h3>Search & Add</h3><div class="tags"><span class="tag green">Movie/TV toggle</span><span class="tag amber">TMDB result cards</span><span class="tag purple">Poster + metadata</span></div></div>
+    <div class="card"><div class="icon">⏳</div><h3>In Progress</h3><div class="tags"><span class="tag amber">Poster cards</span><span class="tag pink">Progress bar per show</span><span class="tag teal">Episodes + hours left</span></div></div>
+    <div class="card"><div class="icon">📅</div><h3>History Page</h3><div class="tags"><span class="tag blue">Date range picker</span><span class="tag green">Period stats</span><span class="tag purple">Chronological feed</span></div></div>
+    <div class="card"><div class="icon">🎬</div><h3>Movie Detail</h3><div class="tags"><span class="tag purple">Poster + metadata</span><span class="tag amber">Mark watched</span><span class="tag pink">Rating + note (optional)</span><span class="tag blue">Unwatch from history</span></div></div>
+    <div class="card"><div class="icon">📺</div><h3>Show Detail</h3><div class="tags"><span class="tag purple">Poster + metadata</span><span class="tag teal">Season accordion</span><span class="tag green">Episode checklist</span><span class="tag amber">Mark season watched</span></div></div>
+  </div>
+</section>
+
+<!-- 9. DEPLOYMENT -->
+<section>
+  <div class="section-header">
+    <div class="section-num">9</div>
+    <div><div class="section-title">Deployment Architecture</div><div class="section-desc">Single container. Host Nginx handles SSL and static serving.</div></div>
+  </div>
+  <div class="card-grid cols-2">
+    <div class="card">
+      <h3 style="margin-bottom:14px">🐳 Docker Setup</h3>
+      <div class="timeline">
+        <div class="tl-item"><div class="tl-dot" style="background:#2496ed"></div><h4>Single Container</h4><p>FastAPI + APScheduler. Host port <strong>8020</strong> mapped to container port 8020.</p></div>
+        <div class="tl-item"><div class="tl-dot" style="background:#2496ed"></div><h4>Named Volume</h4><p><code>mediatracker-data</code> → <code>/data/mediatracker.db</code>. Persists across restarts and updates.</p></div>
+        <div class="tl-item"><div class="tl-dot" style="background:#2496ed"></div><h4>Env Variables</h4><p><code>TMDB_API_KEY</code>, <code>SECRET_KEY</code>, <code>DATABASE_URL</code> passed at runtime via <code>.env</code> file.</p></div>
+        <div class="tl-item"><div class="tl-dot" style="background:#10b981"></div><h4>Restart Policy</h4><p><code>restart: unless-stopped</code> — survives VPS reboots automatically.</p></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3 style="margin-bottom:14px">⚡ Nginx Config Strategy</h3>
+      <div class="timeline">
+        <div class="tl-item"><div class="tl-dot" style="background:#009639"></div><h4>Static Frontend</h4><p>Nginx serves Vue <code>dist/</code> from <code>/var/www/mediatracker/</code>. SPA fallback to <code>index.html</code>.</p></div>
+        <div class="tl-item"><div class="tl-dot" style="background:#009639"></div><h4>API Proxy</h4><p>All <code>/api/*</code> → <code>http://localhost:8020</code>. No CORS — same origin from browser perspective.</p></div>
+        <div class="tl-item"><div class="tl-dot" style="background:#009639"></div><h4>SSL / HTTPS</h4><p>Certbot manages Let's Encrypt on host Nginx. Docker speaks plain HTTP internally.</p></div>
+        <div class="tl-item"><div class="tl-dot" style="background:#10b981"></div><h4>No Subdomain (yet)</h4><p>Can be added as a new Nginx server block later with zero application changes.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 10. EXTENSIBILITY -->
+<section>
+  <div class="section-header">
+    <div class="section-num">10</div>
+    <div><div class="section-title">Migration & Extensibility</div><div class="section-desc">Built to grow — not to rewrite</div></div>
+  </div>
+  <div class="card-grid cols-3">
+    <div class="card green"><div class="icon">🗄️</div><h3>SQLite → PostgreSQL</h3><p>Change <code>DATABASE_URL</code> env var. Run <code>alembic upgrade head</code>. Zero business logic changes needed.</p><div class="tags"><span class="tag green">No code change</span></div></div>
+    <div class="card highlight"><div class="icon">👥</div><h3>Single → Multi-User</h3><p>All data tables already have <code>user_id</code> FK. Add registration endpoint + invite flow only.</p><div class="tags"><span class="tag purple">Schema-ready today</span></div></div>
+    <div class="card amber"><div class="icon">📥</div><h3>Trakt Import</h3><p>One-time Python script parses Trakt JSON. Maps to TMDB IDs, fetches metadata, populates DB. Run via API or CLI.</p><div class="tags"><span class="tag amber">One-time migration</span></div></div>
+  </div>
+</section>
+
+<!-- 11. SUMMARY -->
+<section>
+  <div class="section-header">
+    <div class="section-num">11</div>
+    <div><div class="section-title">Design Summary</div></div>
+  </div>
+  <div class="stat-row">
+    <div class="stat-card"><div class="stat-val" style="color:#a78bfa">6</div><div class="stat-label">Frontend Pages</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:#60a5fa">18</div><div class="stat-label">API Endpoints</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:#34d399">6</div><div class="stat-label">DB Tables</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:#fbbf24">1</div><div class="stat-label">Docker Container</div></div>
+  </div>
+</section>
+
+</div>
+<footer>Personal Media Tracker · System Design · 2026-03-28 · FastAPI + Vue 3 + TMDB + Docker</footer>
+
+<script>
+mermaid.initialize({startOnLoad:true,theme:'dark',themeVariables:{primaryColor:'#6c63ff',primaryTextColor:'#e2e8f0',primaryBorderColor:'#2a2f45',lineColor:'#4b5563',secondaryColor:'#1c2030',tertiaryColor:'#141720',background:'#0d0f14',mainBkg:'#141720',nodeBorder:'#2a2f45',edgeLabelBackground:'#1c2030',fontFamily:'Inter,sans-serif',fontSize:'13px'}});
+</script>
+</body>
+</html>
