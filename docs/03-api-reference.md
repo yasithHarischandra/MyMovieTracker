@@ -302,26 +302,27 @@ Manually trigger the background sync job for returning series.
 
 ---
 
-### `POST /admin/import/movies`
-Import watched movies from a Trakt.tv JSON export.
+### `POST /admin/import/trakt`
+Import watched movies or TV episodes from a standard Trakt.tv JSON export.
+You can upload either the movies JSON array or the shows JSON array to this unified endpoint. The API will automatically detect the format and ingest the items. TMDB IDs are required to fetch missing metadata.
 
-**Body:** Raw JSON array (contents of `watched_movies.json`)
+**Expected Payloads:**
+- **Movies:** An array of objects where each contains `movie.ids.tmdb` and `last_watched_at`.
+- **Shows:** An array of objects where each contains `show.ids.tmdb`, and nested `seasons` -> `episodes` -> `last_watched_at`.
 
-**Response `200`:**
-```json
-{ "imported": 42, "skipped": 3, "errors": 0 }
-```
+_Fallback Support:_ A dictionary payload containing `{"movies": [...], "episodes": [...]}` is also supported for backward compatibility.
 
----
-
-### `POST /admin/import/shows`
-Import watched TV episodes from a Trakt.tv JSON export.
-
-**Body:** Raw JSON array (contents of `watched_shows.json`)
+**Body:** Raw JSON upload of `watched-movies.json` or `watched-shows.json` (as multipart/form-data with a `file` field).
 
 **Response `200`:**
 ```json
-{ "imported": 310, "skipped": 12, "errors": 1 }
+{ 
+  "imported_movies": 42, 
+  "imported_episodes": 310, 
+  "skipped": [
+    { "title": "Obscure Movie", "reason": "Missing TMDB ID" }
+  ] 
+}
 ```
 
 ---

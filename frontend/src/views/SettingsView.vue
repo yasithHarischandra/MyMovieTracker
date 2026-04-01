@@ -40,9 +40,11 @@ const uploadTrakt = async () => {
   isImporting.value = true
   try {
     const res = await client.post('/admin/import/trakt', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 600000
     })
-    toast.success(`Trakt Import Complete! Movies: ${res.movies_imported}, Shows: ${res.shows_imported}, History: ${res.history_created}`)
+    const skippedMsg = res.skipped?.length > 0 ? ` (+${res.skipped.length} Skipped)` : ''
+    toast.success(`Trakt Import Complete! Movies: ${res.imported_movies || 0}, Episodes: ${res.imported_episodes || 0}${skippedMsg}`)
     selectedFile.value = null
   } catch (err) {
     toast.error(err.response?.data?.error || 'Import failed')

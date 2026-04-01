@@ -14,7 +14,16 @@ from app.models.episode import Episode
 from app.models.watch_history import WatchHistory
 from app.services import tmdb_service
 
+import httpx
+from sqlalchemy.exc import IntegrityError, OperationalError
+
 logger = logging.getLogger(__name__)
+
+# Also set up a custom file logger specifically for importing to ensure the user can troubleshoot
+import_handler = logging.FileHandler("import_process.log", encoding="utf-8")
+import_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+logger.addHandler(import_handler)
+logger.setLevel(logging.INFO)
 
 
 def _parse_date(s: Optional[str]) -> Optional[date_type]:
@@ -39,28 +48,53 @@ def _parse_dt(s: Optional[str]) -> Optional[datetime]:
 async def import_trakt_json(raw: bytes, user_id: int, db: AsyncSession) -> dict:
     """
     Parse a Trakt.tv JSON export and import movies + episodes.
-    Expected format: {"movies": [...], "episodes": [...]}
-    Each movie: {"movie": {"ids": {"tmdb": int}}, "watched_at": str}
-    Each episode: {"show": {"ids": {"tmdb": int}}, "episode": {"season": int, "number": int}, "watched_at": str}
+    Supports both legacy dict format and new array formats from Trakt exports.
     """
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as exc:
+        logger.error(f"JSON Decode Error: {exc}")
         return {"error": "Invalid JSON file"}
+    except Exception as exc:
+        logger.exception("Unexpected error parsing initial file upload")
+        return {"error": "Unexpected error parsing file upload"}
 
-    movies_data = data.get("movies", [])
-    episodes_data = data.get("episodes", [])
+    movies_data = []
+    episodes_data = []
+
+    if isinstance(data, dict):
+        movies_data = data.get("movies", [])
+        episodes_data = data.get("episodes", [])
+    elif isinstance(data, list):
+        for entry in data:
+            if "movie" in entry:
+                if "last_watched_at" in entry and "watched_at" not in entry:
+                    entry["watched_at"] = entry["last_watched_at"]
+                movies_data.append(entry)
+            elif "show" in entry:
+                show_data = entry["show"]
+                for season in entry.get("seasons", []):
+                    s_num = season.get("number")
+                    for ep in season.get("episodes", []):
+                        e_num = ep.get("number")
+                        watched_at = ep.get("last_watched_at") or ep.get("watched_at")
+                        episodes_data.append({
+                            "show": show_data,
+                            "episode": {"season": s_num, "number": e_num},
+                            "watched_at": watched_at
+                        })
 
     imported_movies = 0
     imported_episodes = 0
-    skipped = 0
+    skipped_items = []
 
     # ── Import movies ──────────────────────────────────────────────────────
     for entry in movies_data:
         tmdb_id = entry.get("movie", {}).get("ids", {}).get("tmdb")
         watched_at = _parse_dt(entry.get("watched_at"))
         if not tmdb_id:
-            skipped += 1
+            title = entry.get("movie", {}).get("title", "Unknown")
+            skipped_items.append({"title": title, "reason": "Missing TMDB ID"})
             continue
 
         # Upsert movie
@@ -84,13 +118,23 @@ async def import_trakt_json(raw: bytes, user_id: int, db: AsyncSession) -> dict:
                 db.add(movie)
                 await db.flush()
             except Exception as exc:
+                await db.rollback()
                 logger.warning(f"Trakt import: failed to fetch movie tmdb_id={tmdb_id}: {exc}")
-                skipped += 1
+                title = entry.get("movie", {}).get("title", "Unknown")
+                skipped_items.append({"title": title, "reason": f"TMDB Fetch Failed: {exc}"})
                 continue
 
         wh = WatchHistory(user_id=user_id, movie_id=movie.id, watched_at=watched_at)
         db.add(wh)
         imported_movies += 1
+        
+        try:
+            await db.commit()
+            logger.info(f"Successfully processed movie: {movie.title}")
+        except Exception as exc:
+            await db.rollback()
+            logger.error(f"Error commiting movie {movie.title}: {exc}")
+            skipped_items.append({"title": movie.title, "reason": "Database Commit Error"})
 
     # ── Import episodes ────────────────────────────────────────────────────
     # Group by show tmdb_id first to minimise TMDB API calls
@@ -98,7 +142,8 @@ async def import_trakt_json(raw: bytes, user_id: int, db: AsyncSession) -> dict:
     for entry in episodes_data:
         tmdb_id = entry.get("show", {}).get("ids", {}).get("tmdb")
         if not tmdb_id:
-            skipped += 1
+            title = entry.get("show", {}).get("title", "Unknown")
+            skipped_items.append({"title": title, "reason": "Missing TMDB ID"})
             continue
         show_map.setdefault(tmdb_id, {"entries": []})["entries"].append(entry)
 
@@ -144,8 +189,10 @@ async def import_trakt_json(raw: bytes, user_id: int, db: AsyncSession) -> dict:
                         ))
                 await db.flush()
             except Exception as exc:
+                await db.rollback()
                 logger.warning(f"Trakt import: failed show tmdb_id={show_tmdb_id}: {exc}")
-                skipped += len(payload["entries"])
+                title = payload.get("entries", [{}])[0].get("show", {}).get("title", "Unknown") if payload.get("entries") else str(show_tmdb_id)
+                skipped_items.append({"title": title, "reason": f"TMDB Fetch/Insert Failed: {exc}"})
                 continue
 
         # Map episode (season#, ep#) → episode id
@@ -163,19 +210,25 @@ async def import_trakt_json(raw: bytes, user_id: int, db: AsyncSession) -> dict:
             watched_at = _parse_dt(entry.get("watched_at"))
             ep_id = ep_map.get((s, n))
             if not ep_id:
-                skipped += 1
+                title = entry.get("show", {}).get("title", "Unknown")
+                skipped_items.append({"title": title, "reason": f"Episode Mapping Failed for S{s}E{n}"})
                 continue
             db.add(WatchHistory(user_id=user_id, episode_id=ep_id, watched_at=watched_at))
             imported_episodes += 1
 
-    try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        return {"error": "Database error during import. Some entries may have been skipped."}
+        try:
+            await db.commit()
+            logger.info(f"Successfully processed show: {show.name if show else show_map}")
+        except Exception as exc:
+            await db.rollback()
+            logger.error(f"Error commiting show {show.name if show else show_map}: {exc}")
+            skipped_items.append({"title": show.name if show else "Show", "reason": "Database Commit Error"})
+
+
+    logger.info(f"Import complete! Movies: {imported_movies}, Episodes: {imported_episodes}, Skipped: {len(skipped_items)}")
 
     return {
         "imported_movies": imported_movies,
         "imported_episodes": imported_episodes,
-        "skipped": skipped,
+        "skipped": skipped_items,
     }
