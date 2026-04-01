@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import client from '@/api/client'
 import { useToastStore } from '@/stores/toast'
-import { PhCloudArrowUp, PhUploadSimple, PhShieldCheck } from '@phosphor-icons/vue'
+import { PhCloudArrowUp, PhUploadSimple, PhShieldCheck, PhTrash } from '@phosphor-icons/vue'
 
 const authStore = useAuthStore()
 const toast = useToastStore()
@@ -11,6 +11,10 @@ const toast = useToastStore()
 const isSyncing = ref(false)
 const selectedFile = ref(null)
 const isImporting = ref(false)
+const skippedItems = ref([])
+const skippedItemsVisible = ref(false)
+const isClearing = ref(false)
+const isClearingLibrary = ref(false)
 
 const triggerSync = async () => {
   isSyncing.value = true
@@ -38,11 +42,13 @@ const uploadTrakt = async () => {
   formData.append('file', selectedFile.value)
 
   isImporting.value = true
+  skippedItems.value = []
   try {
     const res = await client.post('/admin/import/trakt', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 600000
     })
+    skippedItems.value = res.skipped || []
     const skippedMsg = res.skipped?.length > 0 ? ` (+${res.skipped.length} Skipped)` : ''
     toast.success(`Trakt Import Complete! Movies: ${res.imported_movies || 0}, Episodes: ${res.imported_episodes || 0}${skippedMsg}`)
     selectedFile.value = null
@@ -52,6 +58,38 @@ const uploadTrakt = async () => {
     isImporting.value = false
     // reset input
     document.getElementById('trakt-file').value = ''
+  }
+}
+
+const clearHistory = async () => {
+  if (!confirm('Are you absolutely sure? This will permanently delete your entire watch history. This action cannot be undone.')) {
+    return
+  }
+
+  isClearing.value = true
+  try {
+    await client.delete('/history')
+    toast.success('Watch history cleared successfully')
+  } catch (err) {
+    toast.error('Failed to clear watch history')
+  } finally {
+    isClearing.value = false
+  }
+}
+
+const clearLibrary = async () => {
+  if (!confirm('Are you absolutely sure? This will permanently delete ALL movies and TV shows from your library. This will also delete all associated watch history. This action cannot be undone.')) {
+    return
+  }
+
+  isClearingLibrary.value = true
+  try {
+    await client.delete('/admin/library')
+    toast.success('Library cleared successfully')
+  } catch (err) {
+    toast.error('Failed to clear library')
+  } finally {
+    isClearingLibrary.value = false
   }
 }
 </script>
@@ -128,6 +166,65 @@ const uploadTrakt = async () => {
              {{ isImporting ? 'Importing... (Please wait)' : 'Upload & Import' }}
           </button>
         </form>
+
+        <!-- Skipped Items List -->
+        <div v-if="skippedItems.length > 0" class="mt-6 border border-amber-900/30 bg-amber-900/5 rounded-lg overflow-hidden">
+          <button 
+            @click="skippedItemsVisible = !skippedItemsVisible"
+            class="w-full flex items-center justify-between p-3 text-amber-500 font-bold text-sm hover:bg-amber-900/10 transition-colors"
+          >
+            <span>⚠️ {{ skippedItems.length }} Items were skipped during last import</span>
+            <span class="text-xs">{{ skippedItemsVisible ? 'Hide Details ▲' : 'Show Details ▼' }}</span>
+          </button>
+          
+          <div v-if="skippedItemsVisible" class="max-h-60 overflow-y-auto border-t border-amber-900/30">
+            <table class="w-full text-left text-xs text-gray-400">
+              <thead class="bg-gray-900 text-gray-500 uppercase">
+                <tr>
+                  <th class="px-4 py-2">Title</th>
+                  <th class="px-4 py-2">Reason</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-800">
+                <tr v-for="(item, idx) in skippedItems" :key="idx" class="hover:bg-gray-800/30">
+                  <td class="px-4 py-2 font-medium text-gray-300">{{ item.title }}</td>
+                  <td class="px-4 py-2 text-amber-600/80">{{ item.reason }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Danger Zone -->
+      <section class="bg-red-900/10 border border-red-900/50 rounded-xl p-6 shadow-sm">
+        <h2 class="text-xl font-bold text-red-500 mb-4 flex items-center gap-2">
+          <PhTrash class="w-6 h-6" /> Danger Zone
+        </h2>
+        <p class="text-gray-400 mb-6 text-sm">
+          Permanently remove your entire watch history. This includes all logged movies and TV show episodes. 
+          Your library items (added shows and movies) will remain, but their watch status will be reset.
+        </p>
+
+        <div class="flex flex-col sm:flex-row gap-4">
+          <button 
+            @click="clearHistory" 
+            :disabled="isClearing || isClearingLibrary"
+            class="bg-red-600 hover:bg-red-700 text-white px-6 py-2.5 rounded-lg font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <span v-if="isClearing" class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
+            {{ isClearing ? 'Clearing History...' : 'Clear Entire Watch History' }}
+          </button>
+
+          <button 
+            @click="clearLibrary" 
+            :disabled="isClearing || isClearingLibrary"
+            class="bg-transparent hover:bg-red-600/10 text-red-500 border border-red-500/50 hover:border-red-500 px-6 py-2.5 rounded-lg font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <span v-if="isClearingLibrary" class="animate-spin rounded-full h-4 w-4 border-2 border-red-500 border-t-transparent"></span>
+            {{ isClearingLibrary ? 'Clearing Library...' : 'Clear Entire Library' }}
+          </button>
+        </div>
       </section>
 
     </div>

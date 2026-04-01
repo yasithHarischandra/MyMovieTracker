@@ -7,7 +7,7 @@ from app.core.dependencies import get_db, get_current_user
 from app.models.user import User
 from app.schemas.stats import PeriodStats
 from app.schemas.watch import WatchHistoryEntry
-from app.services.stats_service import get_watch_history, get_period_stats
+from app.services.stats_service import get_watch_history, get_period_stats, clear_watch_history
 
 router = APIRouter(prefix="/history", tags=["history"])
 
@@ -36,6 +36,15 @@ async def get_stats(
     from_dt = _parse_dt(from_date) or datetime(2000, 1, 1, tzinfo=timezone.utc)
     to_dt = _parse_dt(to_date, end_of_day=True) or datetime.now(timezone.utc)
     return await get_period_stats(current_user.id, from_dt, to_dt, db)
+
+
+@router.delete("", status_code=204)
+async def clear_history(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await clear_watch_history(current_user.id, db)
+    return None
 
 
 def _parse_dt(s: Optional[str], end_of_day: bool = False) -> Optional[datetime]:

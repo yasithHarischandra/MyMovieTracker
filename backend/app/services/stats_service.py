@@ -227,3 +227,23 @@ async def get_watch_history(
             item.episode_runtime_mins = ep.runtime_mins
         output.append(item)
     return output
+
+
+async def clear_watch_history(user_id: int, db: AsyncSession) -> None:
+    from sqlalchemy import delete
+    await db.execute(delete(WatchHistory).where(WatchHistory.user_id == user_id))
+    await db.commit()
+
+
+async def clear_library(user_id: int, db: AsyncSession) -> None:
+    from sqlalchemy import delete
+    # Deleting movies and shows will cascade to watch history, seasons, episodes if FKs are enabled
+    # We explicitly delete watch history first just in case
+    await db.execute(delete(WatchHistory).where(WatchHistory.user_id == user_id))
+    await db.execute(delete(Movie).where(Movie.user_id == user_id))
+    
+    # For TV Shows, we want to make sure seasons and episodes are definitely gone.
+    # Since they don't have user_id, they depend on the cascade from TvShow.
+    await db.execute(delete(TvShow).where(TvShow.user_id == user_id))
+    
+    await db.commit()

@@ -124,6 +124,15 @@ async def import_trakt_json(raw: bytes, user_id: int, db: AsyncSession) -> dict:
                 skipped_items.append({"title": title, "reason": f"TMDB Fetch Failed: {exc}"})
                 continue
 
+        # Clear existing history for this movie before re-importing to avoid duplicates
+        from sqlalchemy import delete
+        await db.execute(
+            delete(WatchHistory).where(
+                WatchHistory.user_id == user_id,
+                WatchHistory.movie_id == movie.id
+            )
+        )
+
         wh = WatchHistory(user_id=user_id, movie_id=movie.id, watched_at=watched_at)
         db.add(wh)
         imported_movies += 1
@@ -156,18 +165,28 @@ async def import_trakt_json(raw: bytes, user_id: int, db: AsyncSession) -> dict:
         if not show:
             try:
                 detail = await tmdb_service.get_show_detail(show_tmdb_id)
-                show = TvShow(
-                    tmdb_id=detail["tmdb_id"],
-                    user_id=user_id,
-                    name=detail["name"],
-                    overview=detail.get("overview"),
-                    first_air_date=_parse_date(detail.get("first_air_date")),
-                    genres=detail.get("genres"),
-                    status=detail.get("status"),
-                    poster_path=detail.get("poster_path"),
-                )
-                db.add(show)
-                await db.flush()
+                new_tmdb_id = detail["tmdb_id"]
+                
+                # Double check with the potentially "normalized" TMDB ID
+                if new_tmdb_id != show_tmdb_id:
+                    show_result = await db.execute(
+                        select(TvShow).where(TvShow.tmdb_id == new_tmdb_id, TvShow.user_id == user_id)
+                    )
+                    show = show_result.scalar_one_or_none()
+                
+                if not show:
+                    show = TvShow(
+                        tmdb_id=new_tmdb_id,
+                        user_id=user_id,
+                        name=detail["name"],
+                        overview=detail.get("overview"),
+                        first_air_date=_parse_date(detail.get("first_air_date")),
+                        genres=detail.get("genres"),
+                        status=detail.get("status"),
+                        poster_path=detail.get("poster_path"),
+                    )
+                    db.add(show)
+                    await db.flush()
 
                 for s_data in detail.get("seasons", []):
                     season = Season(
@@ -203,6 +222,15 @@ async def import_trakt_json(raw: bytes, user_id: int, db: AsyncSession) -> dict:
             .where(TvShow.id == show.id)
         )
         ep_map = {(row.season_number, row.episode_number): row.id for row in ep_result}
+
+        # Clear existing history for this show before re-importing to avoid duplicates
+        from sqlalchemy import delete
+        await db.execute(
+            delete(WatchHistory).where(
+                WatchHistory.user_id == user_id,
+                WatchHistory.episode_id.in_(list(ep_map.values()))
+            )
+        )
 
         for entry in payload["entries"]:
             s = entry.get("episode", {}).get("season")

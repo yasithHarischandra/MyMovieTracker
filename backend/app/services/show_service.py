@@ -35,6 +35,16 @@ async def add_show(tmdb_id: int, user_id: int, db: AsyncSession) -> TvShow:
 
     try:
         data = await tmdb_service.get_show_detail(tmdb_id)
+        # Handle case where TMDB ID might have changed (normalized)
+        new_tmdb_id = data["tmdb_id"]
+        if new_tmdb_id != tmdb_id:
+            result = await db.execute(
+                select(TvShow).where(TvShow.tmdb_id == new_tmdb_id, TvShow.user_id == user_id)
+            )
+            if result.scalar_one_or_none():
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Show already in library (ID normalization)")
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to fetch show from TMDB")
 
