@@ -5,7 +5,7 @@ import client from '@/api/client'
 import { useToastStore } from '@/stores/toast'
 import PosterCard from '@/components/common/PosterCard.vue'
 import StarRating from '@/components/common/StarRating.vue'
-import { PhMagnifyingGlass, PhCheckCircle, PhPlus, PhFilmSlate, PhArrowSquareOut, PhEye } from '@phosphor-icons/vue'
+import { PhMagnifyingGlass, PhCheckCircle, PhPlus, PhFilmSlate, PhArrowSquareOut, PhEye, PhArrowUUpLeft } from '@phosphor-icons/vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -92,6 +92,16 @@ const handleAddToLibrary = async (item) => {
     toast.success(`${item.title || item.name} added to library`)
   } catch (err) {
     toast.error(err.response?.data?.detail || 'Failed to add')
+  }
+}
+
+const handlePickup = async (item) => {
+  try {
+    await client.post(`/shows/${item.library_id}/pickup`)
+    item.is_dropped = false
+    toast.success(`"${item.name}" picked up`)
+  } catch (err) {
+    toast.error('Failed to pick up show')
   }
 }
 
@@ -209,11 +219,26 @@ const submitWatch = async () => {
               >
                 <PhPlus weight="bold" class="w-4 h-4" /> Add to Library
               </button>
+
+              <!-- Pick Up (if dropped) -->
+              <button
+                v-else-if="activeTab === 'shows' && item.is_dropped"
+                @click.stop="handlePickup(item)"
+                class="w-full bg-primary/80 hover:bg-primary text-white font-medium py-2 rounded transition-colors flex items-center justify-center gap-2 transform translate-y-4 group-hover:translate-y-0 duration-300"
+                style="transition-delay: 100ms"
+              >
+                <PhArrowUUpLeft weight="bold" class="w-4 h-4" /> Pick Up Show
+              </button>
             </div>
 
             <!-- In Library Badge (persistently visible) -->
-            <div v-if="item.in_library" class="absolute top-2 right-2 bg-primary text-white text-xs font-bold px-2 py-1 rounded-md shadow-lg flex items-center gap-1 pointer-events-none">
-              <PhCheckCircle weight="fill" /> In Library
+            <div v-if="item.in_library" class="absolute top-2 right-2 flex flex-col items-end gap-1">
+              <div class="bg-primary text-white text-xs font-bold px-2 py-1 rounded-md shadow-lg flex items-center gap-1 pointer-events-none">
+                <PhCheckCircle weight="fill" /> In Library
+              </div>
+              <div v-if="item.is_dropped" class="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg uppercase tracking-wider pointer-events-none">
+                Dropped
+              </div>
             </div>
           </template>
         </PosterCard>

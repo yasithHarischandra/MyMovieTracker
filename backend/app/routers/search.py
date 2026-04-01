@@ -48,15 +48,16 @@ async def search_shows(
 
     tmdb_ids = [r["tmdb_id"] for r in results]
     owned_rows = await db.execute(
-        select(TvShow.tmdb_id, TvShow.id).where(TvShow.user_id == current_user.id, TvShow.tmdb_id.in_(tmdb_ids))
+        select(TvShow.tmdb_id, TvShow.id, TvShow.is_dropped).where(TvShow.user_id == current_user.id, TvShow.tmdb_id.in_(tmdb_ids))
     )
-    owned_map: dict[int, int] = {r.tmdb_id: r.id for r in owned_rows}
+    owned_info = {r.tmdb_id: (r.id, r.is_dropped) for r in owned_rows}
 
     return [
         ShowSearchResult(
             **r,
-            in_library=r["tmdb_id"] in owned_map,
-            library_id=owned_map.get(r["tmdb_id"]),
+            in_library=r["tmdb_id"] in owned_info,
+            library_id=owned_info.get(r["tmdb_id"])[0] if r["tmdb_id"] in owned_info else None,
+            is_dropped=owned_info.get(r["tmdb_id"])[1] if r["tmdb_id"] in owned_info else False,
         )
         for r in results
     ]

@@ -164,12 +164,30 @@ async def unwatch_episode(watch_history_id: int, user_id: int, db: AsyncSession)
     await db.commit()
 
 
-async def get_in_progress(user_id: int, db: AsyncSession) -> list[InProgressShow]:
+async def pickup_show(show_id: int, user_id: int, db: AsyncSession) -> TvShow:
+    show = await _get_show_owned(show_id, user_id, db)
+    show.is_dropped = False
+    await db.commit()
+    await db.refresh(show)
+    return show
+
+
+async def drop_show(show_id: int, user_id: int, db: AsyncSession) -> TvShow:
+    show = await _get_show_owned(show_id, user_id, db)
+    show.is_dropped = True
+    await db.commit()
+    await db.refresh(show)
+    return show
+
+
+async def get_in_progress(user_id: int, db: AsyncSession, include_dropped: bool = False) -> list[InProgressShow]:
     # Get all shows with at least one watched episode
+    query = select(TvShow).where(TvShow.user_id == user_id)
+    if not include_dropped:
+        query = query.where(TvShow.is_dropped == False)
+        
     shows_result = await db.execute(
-        select(TvShow)
-        .where(TvShow.user_id == user_id)
-        .options(selectinload(TvShow.seasons).selectinload(Season.episodes))
+        query.options(selectinload(TvShow.seasons).selectinload(Season.episodes))
     )
     shows = list(shows_result.scalars().all())
 
@@ -211,6 +229,7 @@ async def get_in_progress(user_id: int, db: AsyncSession) -> list[InProgressShow
             name=show.name,
             poster_path=show.poster_path,
             status=show.status,
+            is_dropped=show.is_dropped,
             total_episodes=total,
             watched_episodes=watched_count,
             remaining_episodes=remaining,

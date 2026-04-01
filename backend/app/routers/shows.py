@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db, get_current_user
@@ -22,16 +22,17 @@ async def add_show(
     return ShowResponse(
         id=show.id, tmdb_id=show.tmdb_id, name=show.name, overview=show.overview,
         first_air_date=show.first_air_date, genres=show.genres, status=show.status,
-        poster_path=show.poster_path, added_at=show.added_at,
+        poster_path=show.poster_path, is_dropped=show.is_dropped, added_at=show.added_at,
     )
 
 
 @router.get("/in-progress", response_model=list[InProgressShow])
 async def get_in_progress(
+    include_dropped: bool = Query(False),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await show_service.get_in_progress(current_user.id, db)
+    return await show_service.get_in_progress(current_user.id, db, include_dropped=include_dropped)
 
 
 @router.get("/{show_id}", response_model=ShowResponse)
@@ -80,11 +81,31 @@ async def get_show(
     return ShowResponse(
         id=show.id, tmdb_id=show.tmdb_id, name=show.name, overview=show.overview,
         first_air_date=show.first_air_date, genres=show.genres, status=show.status,
-        poster_path=show.poster_path, added_at=show.added_at, seasons=seasons_out,
+        poster_path=show.poster_path, is_dropped=show.is_dropped, added_at=show.added_at, seasons=seasons_out,
         total_episodes=total_eps, watched_episodes=watched_eps,
         remaining_episodes=total_eps - watched_eps,
         remaining_hours=round(remaining_mins / 60, 1),
     )
+
+
+@router.post("/{show_id}/drop", response_model=ShowResponse)
+async def drop_show(
+    show_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    show = await show_service.drop_show(show_id, current_user.id, db)
+    return await get_show(show.id, current_user, db)
+
+
+@router.post("/{show_id}/pickup", response_model=ShowResponse)
+async def pickup_show(
+    show_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    show = await show_service.pickup_show(show_id, current_user.id, db)
+    return await get_show(show.id, current_user, db)
 
 
 @router.post("/{show_id}/episodes/{episode_id}/watch", response_model=WatchHistoryEntry, status_code=status.HTTP_201_CREATED)

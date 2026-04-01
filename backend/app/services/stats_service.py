@@ -67,16 +67,24 @@ async def get_dashboard_stats(user_id: int, db: AsyncSession) -> DashboardStats:
         if not all_eps:
             continue
             
-        total_eps += len(all_eps)
         all_ep_ids = {ep.id for ep in all_eps}
-        w = len(all_ep_ids & watched_ep_ids)
+        w_eps = all_ep_ids & watched_ep_ids
+        w = len(w_eps)
         
+        # If show is dropped, we only count its watched episodes towards total_eps
+        # and we don't count it towards in-progress or remaining stats
+        if show.is_dropped:
+            total_eps += w
+            continue
+
+        # Active shows contribute all their episodes to the total
+        total_eps += len(all_eps)
+
         # In-progress means started but not finished
         if 0 < w < len(all_ep_ids):
             in_progress_count += 1
             
-        # Compute remaining stats for ALL shows (so watched + remaining = total)
-        # Using pure Python properly handles the fallback to 45 mins for missing runtimes
+        # Compute remaining stats for ALL non-dropped shows
         if w < len(all_ep_ids):
             for ep in all_eps:
                 if ep.id not in watched_ep_ids:

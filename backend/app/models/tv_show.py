@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, String, Date, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Integer, String, Date, DateTime, ForeignKey, UniqueConstraint, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from typing import Optional
@@ -20,6 +20,7 @@ class TvShow(Base):
     genres: Mapped[Optional[str]] = mapped_column(String(500))
     status: Mapped[Optional[str]] = mapped_column(String(100))  # e.g. "Returning Series", "Ended"
     poster_path: Mapped[Optional[str]] = mapped_column(String(500))
+    is_dropped: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     added_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_synced_at: Mapped[Optional[DateTime]] = mapped_column(DateTime(timezone=True))
 

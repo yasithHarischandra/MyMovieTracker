@@ -45,6 +45,7 @@ class ShowBase(BaseModel):
     genres: Optional[str] = None
     status: Optional[str] = None
     poster_path: Optional[str] = None
+    is_dropped: bool = False
     added_at: datetime
 
 
@@ -66,6 +67,7 @@ class ShowSearchResult(BaseModel):
     status: Optional[str] = None
     in_library: bool = False
     library_id: Optional[int] = None
+    is_dropped: bool = False
 
 
 class InProgressShow(BaseModel):
@@ -74,6 +76,7 @@ class InProgressShow(BaseModel):
     name: str
     poster_path: Optional[str] = None
     status: Optional[str] = None
+    is_dropped: bool = False
     total_episodes: int
     watched_episodes: int
     remaining_episodes: int

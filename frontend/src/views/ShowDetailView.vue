@@ -6,6 +6,7 @@ import { useToastStore } from '@/stores/toast'
 import PosterCard from '@/components/common/PosterCard.vue'
 import SeasonAccordion from '@/components/shows/SeasonAccordion.vue'
 import ProgressBar from '@/components/common/ProgressBar.vue'
+import { PhEyeSlash, PhArrowUUpLeft } from '@phosphor-icons/vue'
 
 const route = useRoute()
 const toast = useToastStore()
@@ -20,6 +21,26 @@ const loadShow = async () => {
     toast.error('Failed to load TV show')
   } finally {
     loading.value = false
+  }
+}
+
+const handleDrop = async () => {
+  try {
+    await client.post(`/shows/${show.value.id}/drop`)
+    toast.success(`"${show.value.name}" dropped`)
+    await loadShow()
+  } catch (err) {
+    toast.error('Failed to drop show')
+  }
+}
+
+const handlePickup = async () => {
+  try {
+    await client.post(`/shows/${show.value.id}/pickup`)
+    toast.success(`"${show.value.name}" picked up`)
+    await loadShow()
+  } catch (err) {
+    toast.error('Failed to pick up show')
   }
 }
 
@@ -82,12 +103,22 @@ onMounted(loadShow)
         <div class="flex flex-wrap items-center gap-4 mb-2">
           <h1 class="text-4xl font-extrabold text-white">{{ show.name }}</h1>
           <span class="px-2 py-0.5 mt-2 bg-surface text-gray-400 border border-gray-700 font-mono text-sm rounded">{{ show.status }}</span>
+          <span v-if="show.is_dropped" class="px-2 py-0.5 mt-2 bg-red-600/20 text-red-500 border border-red-500/30 font-bold text-xs rounded uppercase tracking-wider">Dropped</span>
         </div>
         
         <div class="flex flex-wrap gap-2 text-sm font-mono text-gray-400 mb-6 items-center">
           <span>{{ show.first_air_date ? show.first_air_date.substring(0,4) : 'TBA' }}</span>
           <span class="text-gray-600 px-1">•</span>
           <span class="text-secondary font-bold px-2 py-0.5 bg-secondary/10 rounded">{{ show.genres }}</span>
+        </div>
+
+        <div class="flex gap-3 mb-8">
+          <button v-if="!show.is_dropped" @click="handleDrop" class="btn-secondary flex items-center gap-2 text-gray-400 hover:text-red-500 hover:border-red-500/50">
+            <PhEyeSlash class="w-5 h-5" /> Drop Series
+          </button>
+          <button v-else @click="handlePickup" class="btn-primary flex items-center gap-2">
+            <PhArrowUUpLeft class="w-5 h-5" /> Pick Up Series
+          </button>
         </div>
 
         <p class="text-gray-300 leading-relaxed max-w-3xl text-lg mb-8">{{ show.overview || 'No overview available.' }}</p>
