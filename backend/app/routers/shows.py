@@ -78,6 +78,21 @@ async def get_show(
             episodes=ep_out,
         ))
 
+    next_ep_model = show_service.find_next_episode(show, set(watched_map.keys()))
+    next_ep_data = None
+    if next_ep_model:
+        ep_season = next((s for s in show.seasons if s.id == next_ep_model.season_id), None)
+        next_ep_data = EpisodeResponse(
+            id=next_ep_model.id,
+            episode_number=next_ep_model.episode_number,
+            season_number=ep_season.season_number if ep_season else None,
+            name=next_ep_model.name,
+            runtime_mins=next_ep_model.runtime_mins,
+            air_date=next_ep_model.air_date,
+            watched=False,
+            watch_history_id=None
+        )
+
     return ShowResponse(
         id=show.id, tmdb_id=show.tmdb_id, name=show.name, overview=show.overview,
         first_air_date=show.first_air_date, genres=show.genres, status=show.status,
@@ -85,6 +100,7 @@ async def get_show(
         total_episodes=total_eps, watched_episodes=watched_eps,
         remaining_episodes=total_eps - watched_eps,
         remaining_hours=round(remaining_mins / 60, 1),
+        next_episode=next_ep_data,
     )
 
 
@@ -118,6 +134,16 @@ async def mark_episode_watched(
 ):
     entry = await show_service.mark_episode_watched(show_id, episode_id, current_user.id, body, db)
     return WatchHistoryEntry(id=entry.id, watched_at=entry.watched_at, rating=entry.rating, note=entry.note, episode_id=episode_id)
+
+
+@router.post("/{show_id}/watch-next", response_model=WatchHistoryEntry, status_code=status.HTTP_201_CREATED)
+async def mark_next_episode_watched(
+    show_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    entry = await show_service.mark_next_episode_watched(show_id, current_user.id, db)
+    return WatchHistoryEntry(id=entry.id, watched_at=entry.watched_at, episode_id=entry.episode_id)
 
 
 @router.post("/{show_id}/seasons/{season_number}/watch", status_code=status.HTTP_201_CREATED)

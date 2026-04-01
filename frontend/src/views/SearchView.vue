@@ -5,7 +5,7 @@ import client from '@/api/client'
 import { useToastStore } from '@/stores/toast'
 import PosterCard from '@/components/common/PosterCard.vue'
 import StarRating from '@/components/common/StarRating.vue'
-import { PhMagnifyingGlass, PhCheckCircle, PhPlus, PhFilmSlate, PhArrowSquareOut, PhEye, PhArrowUUpLeft } from '@phosphor-icons/vue'
+import { PhMagnifyingGlass, PhCheckCircle, PhPlus, PhFilmSlate, PhArrowSquareOut, PhEye, PhArrowUUpLeft, PhFastForward } from '@phosphor-icons/vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -15,6 +15,7 @@ const query = ref(route.query.q || '')
 const activeTab = ref(route.query.type || 'movies')
 const results = ref([])
 const loading = ref(false)
+const loadingId = ref(null)
 const searchTimer = ref(null)
 
 // Quick-watch modal state (movies only)
@@ -140,6 +141,20 @@ const submitWatch = async () => {
     submitting.value = false
   }
 }
+
+const handleMarkNext = async (item) => {
+  if (loadingId.value) return
+  loadingId.value = item.tmdb_id
+  try {
+    await client.post(`/shows/${item.library_id}/watch-next`)
+    toast.success(`Marked next episode of ${item.name} as watched`)
+    await doSearch()
+  } catch (err) {
+    toast.error(err.response?.data?.detail || 'Failed to mark next episode')
+  } finally {
+    loadingId.value = null
+  }
+}
 </script>
 
 <template>
@@ -200,14 +215,28 @@ const submitWatch = async () => {
                 <PhArrowSquareOut weight="bold" class="w-4 h-4" /> View Details
               </button>
 
+              <!-- Mark Next Watched (shows only, if in progress) -->
+              <button
+                v-if="activeTab === 'shows' && item.next_episode && !item.is_dropped"
+                @click.stop="handleMarkNext(item)"
+                class="w-full bg-primary/80 hover:bg-primary text-white font-medium py-2 rounded transition-colors flex items-center justify-center gap-2 transform translate-y-4 group-hover:translate-y-0 duration-300 disabled:opacity-50"
+                style="transition-delay: 50ms"
+                :disabled="loadingId === item.tmdb_id"
+                title="mark next episode watched"
+              >
+                <PhFastForward weight="bold" class="w-4 h-4" v-if="loadingId !== item.tmdb_id" />
+                <div v-else class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                S{{ item.next_episode.season_number.toString().padStart(2, '0') }}E{{ item.next_episode.episode_number.toString().padStart(2, '0') }}
+              </button>
+
               <!-- Mark as Watched (movies only, always shown) -->
               <button
                 v-if="activeTab === 'movies'"
                 @click.stop="openWatchModal(item)"
                 class="w-full bg-primary/80 hover:bg-primary text-white font-medium py-2 rounded transition-colors flex items-center justify-center gap-2 transform translate-y-4 group-hover:translate-y-0 duration-300"
-                style="transition-delay: 50ms"
+                style="transition-delay: 100ms"
               >
-                <PhEye weight="bold" class="w-4 h-4" /> Mark Watched
+                <PhFastForward weight="bold" class="w-4 h-4" /> Mark Watched
               </button>
 
               <!-- Add to Library (when not in library) -->
@@ -215,7 +244,7 @@ const submitWatch = async () => {
                 v-if="!item.in_library"
                 @click.stop="handleAddToLibrary(item)"
                 class="w-full bg-accent/80 hover:bg-accent text-white font-medium py-2 rounded transition-colors flex items-center justify-center gap-2 transform translate-y-4 group-hover:translate-y-0 duration-300"
-                style="transition-delay: 100ms"
+                style="transition-delay: 150ms"
               >
                 <PhPlus weight="bold" class="w-4 h-4" /> Add to Library
               </button>
@@ -225,16 +254,19 @@ const submitWatch = async () => {
                 v-else-if="activeTab === 'shows' && item.is_dropped"
                 @click.stop="handlePickup(item)"
                 class="w-full bg-primary/80 hover:bg-primary text-white font-medium py-2 rounded transition-colors flex items-center justify-center gap-2 transform translate-y-4 group-hover:translate-y-0 duration-300"
-                style="transition-delay: 100ms"
+                style="transition-delay: 150ms"
               >
                 <PhArrowUUpLeft weight="bold" class="w-4 h-4" /> Pick Up Show
               </button>
             </div>
 
             <!-- In Library Badge (persistently visible) -->
-            <div v-if="item.in_library" class="absolute top-2 right-2 flex flex-col items-end gap-1">
-              <div class="bg-primary text-white text-xs font-bold px-2 py-1 rounded-md shadow-lg flex items-center gap-1 pointer-events-none">
+            <div class="absolute top-2 right-2 flex flex-col items-end gap-1">
+              <div v-if="item.in_library" class="bg-primary text-white text-xs font-bold px-2 py-1 rounded-md shadow-lg flex items-center gap-1 pointer-events-none">
                 <PhCheckCircle weight="fill" /> In Library
+              </div>
+              <div v-if="item.status_label" class="bg-secondary text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg flex items-center gap-1 pointer-events-none uppercase tracking-wider">
+                <PhCheckCircle weight="fill" class="w-3 h-3" /> {{ item.status_label }}
               </div>
               <div v-if="item.is_dropped" class="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg uppercase tracking-wider pointer-events-none">
                 Dropped

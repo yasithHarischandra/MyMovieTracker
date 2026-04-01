@@ -3,10 +3,11 @@ import { ref, onMounted, watch } from 'vue'
 import client from '@/api/client'
 import { useToastStore } from '@/stores/toast'
 import PosterCard from '@/components/common/PosterCard.vue'
-import { PhArchiveBox, PhArrowUUpLeft, PhEyeSlash } from '@phosphor-icons/vue'
+import { PhArchiveBox, PhArrowUUpLeft, PhEyeSlash, PhFastForward } from '@phosphor-icons/vue'
 
 const inProgress = ref([])
 const loading = ref(true)
+const loadingId = ref(null)
 const showDropped = ref(false)
 const toast = useToastStore()
 
@@ -42,6 +43,20 @@ const handlePickup = async (show) => {
     await fetchInProgress(false)
   } catch (err) {
     toast.error('Failed to pick up show')
+  }
+}
+
+const markNext = async (show) => {
+  if (loadingId.value) return
+  loadingId.value = show.id
+  try {
+    await client.post(`/shows/${show.id}/watch-next`)
+    toast.success(`Marked next episode of ${show.name} as watched`)
+    await fetchInProgress(false)
+  } catch (err) {
+    toast.error(err.response?.data?.detail || 'Failed to mark next episode')
+  } finally {
+    loadingId.value = null
   }
 }
 </script>
@@ -127,7 +142,23 @@ const handlePickup = async (show) => {
               </div>
               <span class="text-xs font-mono font-bold text-gray-300 w-8 text-right">{{ Math.round(show.progress_pct) }}%</span>
             </div>
+
+            <div class="text-[10px] text-gray-500 italic mt-1 truncate" v-if="show.next_episode && !show.is_dropped">
+              Next: S{{show.next_episode.season_number}}E{{show.next_episode.episode_number}} · {{show.next_episode.name}}
+            </div>
           </div>
+
+          <button 
+            v-if="show.next_episode && !show.is_dropped"
+            @click.prevent="markNext(show)" 
+            class="bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 hover:border-primary/40 rounded-lg py-2 flex items-center justify-center gap-2 text-xs font-bold transition-all disabled:opacity-50"
+            :disabled="loadingId === show.id"
+            title="mark next episode watched"
+          >
+            <PhFastForward weight="bold" class="w-4 h-4" v-if="loadingId !== show.id" />
+            <div v-else class="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+            S{{ show.next_episode.season_number.toString().padStart(2, '0') }}E{{ show.next_episode.episode_number.toString().padStart(2, '0') }}
+          </button>
         </div>
       </div>
     </div>

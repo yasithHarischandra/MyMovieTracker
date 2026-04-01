@@ -121,6 +121,30 @@ async def mark_episode_watched(
     return entry
 
 
+async def mark_next_episode_watched(show_id: int, user_id: int, db: AsyncSession) -> WatchHistory:
+    show = await _get_show_owned(show_id, user_id, db)
+    
+    # Get watched IDs
+    all_ep_ids = [ep.id for s in show.seasons for ep in s.episodes]
+    watched_result = await db.execute(
+        select(WatchHistory.episode_id).where(
+            WatchHistory.user_id == user_id,
+            WatchHistory.episode_id.in_(all_ep_ids),
+        )
+    )
+    watched_ids = {r.episode_id for r in watched_result}
+    
+    next_ep = find_next_episode(show, watched_ids)
+    if not next_ep:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No more episodes to watch")
+        
+    entry = WatchHistory(user_id=user_id, episode_id=next_ep.id)
+    db.add(entry)
+    await db.commit()
+    await db.refresh(entry)
+    return entry
+
+
 async def mark_season_watched(
     show_id: int, season_number: int, user_id: int, db: AsyncSession
 ) -> list[WatchHistory]:
@@ -180,6 +204,15 @@ async def drop_show(show_id: int, user_id: int, db: AsyncSession) -> TvShow:
     return show
 
 
+def find_next_episode(show: TvShow, watched_ids: set[int]) -> Optional[Episode]:
+    """Finds the first unwatched episode in a show."""
+    for s in sorted(show.seasons, key=lambda x: x.season_number):
+        for ep in sorted(s.episodes, key=lambda x: x.episode_number):
+            if ep.id not in watched_ids:
+                return ep
+    return None
+
+
 async def get_in_progress(user_id: int, db: AsyncSession, include_dropped: bool = False) -> list[InProgressShow]:
     # Get all shows with at least one watched episode
     query = select(TvShow).where(TvShow.user_id == user_id)
@@ -223,6 +256,26 @@ async def get_in_progress(user_id: int, db: AsyncSession, include_dropped: bool 
         )
         progress_pct = round((watched_count / total) * 100, 1) if total > 0 else 0
 
+        # Find next episode
+        next_ep_model = find_next_episode(show, watched_ids)
+        
+        next_ep_data = None
+        if next_ep_model:
+            from app.schemas.tv_show import EpisodeResponse
+            # Find which season this ep belongs to for season_number
+            ep_season = next((s for s in show.seasons if s.id == next_ep_model.season_id), None)
+            
+            next_ep_data = EpisodeResponse(
+                id=next_ep_model.id,
+                episode_number=next_ep_model.episode_number,
+                season_number=ep_season.season_number if ep_season else None,
+                name=next_ep_model.name,
+                runtime_mins=next_ep_model.runtime_mins,
+                air_date=next_ep_model.air_date,
+                watched=False,
+                watch_history_id=None
+            )
+
         in_progress.append(InProgressShow(
             id=show.id,
             tmdb_id=show.tmdb_id,
@@ -235,6 +288,7 @@ async def get_in_progress(user_id: int, db: AsyncSession, include_dropped: bool 
             remaining_episodes=remaining,
             remaining_hours=round(remaining_mins / 60, 1),
             progress_pct=progress_pct,
+            next_episode=next_ep_data,
         ))
 
     return sorted(in_progress, key=lambda s: s.remaining_episodes)

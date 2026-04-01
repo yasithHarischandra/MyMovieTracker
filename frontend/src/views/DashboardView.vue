@@ -46,7 +46,7 @@ onMounted(() => {
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         <ActivityFeed :activities="dashboardData.recent_activity" class="lg:col-span-2" />
         <div class="lg:col-span-1 space-y-6 lg:sticky lg:top-24">
-          <InProgressWidget :shows="dashboardData.in_progress" />
+          <InProgressWidget :shows="dashboardData.in_progress" @refresh="loadDashboard" />
           
           <!-- Quick Actions / Sync -->
           <div class="bg-surface border border-gray-800 rounded-xl p-5 shadow-sm text-center">

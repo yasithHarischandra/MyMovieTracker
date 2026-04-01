@@ -35,3 +35,4 @@ class MovieSearchResult(BaseModel):
     poster_path: Optional[str] = None
     in_library: bool = False
     library_id: Optional[int] = None
+    status_label: Optional[str] = None

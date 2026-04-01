@@ -48,3 +48,29 @@ async def test_mark_season_watched_completes_show(auth_client):
     # Completed show should NOT be in in-progress
     prog_res = await auth_client.get("/api/shows/in-progress")
     assert len(prog_res.json()) == 0
+
+async def test_mark_next_episode_watched(auth_client):
+    show_res = await auth_client.post("/api/shows", json={"tmdb_id": 456})
+    show_id = show_res.json()["id"]
+    
+    # Season 1 has 2 episodes. Next should be S1E1.
+    watch_res = await auth_client.post(f"/api/shows/{show_id}/watch-next")
+    assert watch_res.status_code == 201
+    
+    get_res = await auth_client.get(f"/api/shows/{show_id}")
+    data = get_res.json()
+    assert data["watched_episodes"] == 1
+    assert data["next_episode"]["episode_number"] == 2
+    
+    # Mark next again (S1E2)
+    watch_res2 = await auth_client.post(f"/api/shows/{show_id}/watch-next")
+    assert watch_res2.status_code == 201
+    
+    get_res2 = await auth_client.get(f"/api/shows/{show_id}")
+    data2 = get_res2.json()
+    assert data2["watched_episodes"] == 2
+    assert data2["next_episode"] is None
+    
+    # Mark next again (should fail)
+    watch_res3 = await auth_client.post(f"/api/shows/{show_id}/watch-next")
+    assert watch_res3.status_code == 400

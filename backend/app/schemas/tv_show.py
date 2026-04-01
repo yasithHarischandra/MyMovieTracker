@@ -12,6 +12,7 @@ class EpisodeResponse(BaseModel):
 
     id: int
     episode_number: int
+    season_number: Optional[int] = None
     name: Optional[str] = None
     runtime_mins: Optional[int] = None
     air_date: Optional[date] = None
@@ -55,6 +56,7 @@ class ShowResponse(ShowBase):
     watched_episodes: int = 0
     remaining_episodes: int = 0
     remaining_hours: float = 0.0
+    next_episode: Optional[EpisodeResponse] = None
 
 
 class ShowSearchResult(BaseModel):
@@ -68,6 +70,8 @@ class ShowSearchResult(BaseModel):
     in_library: bool = False
     library_id: Optional[int] = None
     is_dropped: bool = False
+    next_episode: Optional[EpisodeResponse] = None
+    status_label: Optional[str] = None
 
 
 class InProgressShow(BaseModel):
@@ -82,3 +86,4 @@ class InProgressShow(BaseModel):
     remaining_episodes: int
     remaining_hours: float
     progress_pct: float
+    next_episode: Optional[EpisodeResponse] = None

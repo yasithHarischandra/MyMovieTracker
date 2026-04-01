@@ -6,12 +6,13 @@ import { useToastStore } from '@/stores/toast'
 import PosterCard from '@/components/common/PosterCard.vue'
 import SeasonAccordion from '@/components/shows/SeasonAccordion.vue'
 import ProgressBar from '@/components/common/ProgressBar.vue'
-import { PhEyeSlash, PhArrowUUpLeft } from '@phosphor-icons/vue'
+import { PhEyeSlash, PhArrowUUpLeft, PhFastForward } from '@phosphor-icons/vue'
 
 const route = useRoute()
 const toast = useToastStore()
 const show = ref(null)
 const loading = ref(true)
+const submitting = ref(false)
 
 const loadShow = async () => {
   loading.value = true
@@ -86,6 +87,20 @@ const watchSeason = async (season) => {
   }
 }
 
+const markNext = async () => {
+  if (submitting.value) return
+  submitting.value = true
+  try {
+    await client.post(`/shows/${show.value.id}/watch-next`)
+    toast.success(`Marked next episode as watched`)
+    await loadShow()
+  } catch (err) {
+    toast.error('Failed to mark next episode')
+  } finally {
+    submitting.value = false
+  }
+}
+
 onMounted(loadShow)
 </script>
 
@@ -113,6 +128,18 @@ onMounted(loadShow)
         </div>
 
         <div class="flex gap-3 mb-8">
+          <button 
+            v-if="show.next_episode && !show.is_dropped"
+            @click="markNext"
+            class="btn-primary flex items-center gap-2"
+            :disabled="submitting"
+            title="mark next episode watched"
+          >
+            <PhFastForward weight="bold" class="w-5 h-5" v-if="!submitting" />
+            <div v-else class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            S{{ show.next_episode.season_number.toString().padStart(2, '0') }}E{{ show.next_episode.episode_number.toString().padStart(2, '0') }}
+          </button>
+
           <button v-if="!show.is_dropped" @click="handleDrop" class="btn-secondary flex items-center gap-2 text-gray-400 hover:text-red-500 hover:border-red-500/50">
             <PhEyeSlash class="w-5 h-5" /> Drop Series
           </button>
