@@ -1,6 +1,6 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 
 class ShowAddRequest(BaseModel):
@@ -87,3 +87,13 @@ class InProgressShow(BaseModel):
     remaining_hours: float
     progress_pct: float
     next_episode: Optional[EpisodeResponse] = None
+    last_watched_at: Optional[datetime] = None
+
+    @field_serializer("last_watched_at")
+    def serialize_last_watched_at(self, v: Optional[datetime]) -> Optional[str]:
+        if v is None:
+            return None
+        # Ensure it has Z suffix and is treated as UTC
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
+        return v.isoformat().replace("+00:00", "Z")

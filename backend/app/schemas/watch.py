@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, field_serializer
 
 
 class WatchCreate(BaseModel):
@@ -25,6 +25,12 @@ class WatchHistoryEntry(BaseModel):
     id: int
     watched_at: datetime
     rating: Optional[int] = None
+
+    @field_serializer("watched_at")
+    def serialize_watched_at(self, v: datetime) -> str:
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
+        return v.isoformat().replace("+00:00", "Z")
     note: Optional[str] = None
 
     # Movie fields (populated when this is a movie watch)

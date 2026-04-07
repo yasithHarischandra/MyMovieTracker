@@ -1,15 +1,25 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
+import { formatDistanceToNow } from 'date-fns'
 import client from '@/api/client'
 import { useToastStore } from '@/stores/toast'
 import PosterCard from '@/components/common/PosterCard.vue'
-import { PhArchiveBox, PhArrowUUpLeft, PhEyeSlash, PhFastForward } from '@phosphor-icons/vue'
+import { PhArchiveBox, PhArrowUUpLeft, PhEyeSlash, PhFastForward, PhClockCounterClockwise } from '@phosphor-icons/vue'
 
 const inProgress = ref([])
 const loading = ref(true)
 const loadingId = ref(null)
 const showDropped = ref(false)
 const toast = useToastStore()
+
+const getRelativeTime = (isoString) => {
+  if (!isoString) return 'Never'
+  try {
+    return formatDistanceToNow(new Date(isoString), { addSuffix: true })
+  } catch (e) {
+    return 'Unknown'
+  }
+}
 
 const fetchInProgress = async (isInitial = false) => {
   if (isInitial) loading.value = true
@@ -131,9 +141,16 @@ const markNext = async (show) => {
           </RouterLink>
           
           <div class="space-y-2">
+            <div class="flex justify-between text-xs text-gray-500 border-b border-gray-800 pb-2 mb-1">
+              <div class="flex items-center gap-1">
+                <PhClockCounterClockwise class="w-3.5 h-3.5 text-primary" />
+                <span>{{ getRelativeTime(show.last_watched_at) }}</span>
+              </div>
+              <span class="font-mono text-amber-500">{{ show.remaining_hours }}h left</span>
+            </div>
+
             <div class="flex justify-between text-sm text-gray-400">
-              <span>{{ show.remaining_episodes }} eps left</span>
-              <span class="font-mono text-amber-500">{{ show.remaining_hours }}h</span>
+              <span>{{ show.remaining_episodes }} episodes to go</span>
             </div>
             
             <div class="flex items-center gap-2">

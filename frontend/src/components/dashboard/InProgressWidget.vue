@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue'
+import { formatDistanceToNow } from 'date-fns'
 import client from '@/api/client'
 import { PhCheckCircle, PhClock, PhFastForward } from '@phosphor-icons/vue'
 import { useToastStore } from '@/stores/toast'
@@ -11,6 +12,15 @@ const props = defineProps({
 const emit = defineEmits(['refresh'])
 const toast = useToastStore()
 const loadingId = ref(null)
+
+const getRelativeTime = (isoString) => {
+  if (!isoString) return ''
+  try {
+    return formatDistanceToNow(new Date(isoString), { addSuffix: true })
+  } catch (e) {
+    return ''
+  }
+}
 
 const markNext = async (show) => {
   if (loadingId.value) return
@@ -54,6 +64,7 @@ const markNext = async (show) => {
             <h3 class="font-semibold text-white truncate text-sm" :title="show.name">{{ show.name }}</h3>
             <div class="flex items-center justify-between mt-0.5 min-w-0">
               <span class="text-[10px] text-amber-500 whitespace-nowrap">{{ show.remaining_episodes }} left</span>
+              <span class="text-[9px] text-gray-500 truncate ml-2">{{ getRelativeTime(show.last_watched_at) }}</span>
             </div>
             
             <div class="text-[10px] text-gray-500 mt-0.5 truncate italic" v-if="show.next_episode">

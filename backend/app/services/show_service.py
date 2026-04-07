@@ -4,14 +4,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 from sqlalchemy.exc import IntegrityError
-from datetime import date as date_type
+from datetime import date as date_type, datetime
 
 from app.models.tv_show import TvShow
 from app.models.season import Season
 from app.models.episode import Episode
 from app.models.watch_history import WatchHistory
 from app.schemas.watch import WatchCreate
-from app.schemas.tv_show import InProgressShow
+from app.schemas.tv_show import InProgressShow, EpisodeResponse
 from app.services import tmdb_service
 
 
@@ -225,7 +225,7 @@ def find_next_episode(show: TvShow, watched_ids: set[int]) -> Optional[Episode]:
 
 
 async def get_in_progress(user_id: int, db: AsyncSession, include_dropped: bool = False) -> list[InProgressShow]:
-    # Get all shows with at least one watched episode
+    # Get all shows for the user
     query = select(TvShow).where(TvShow.user_id == user_id)
     if not include_dropped:
         query = query.where(TvShow.is_dropped == False)
@@ -235,19 +235,29 @@ async def get_in_progress(user_id: int, db: AsyncSession, include_dropped: bool 
     )
     shows = list(shows_result.scalars().all())
 
+    # Fetch all watched episodes for this user across all their shows
+    # to avoid N+1 queries.
+    watched_q = (
+        select(WatchHistory.episode_id, WatchHistory.watched_at, Season.show_id)
+        .join(Episode, WatchHistory.episode_id == Episode.id)
+        .join(Season, Episode.season_id == Season.id)
+        .where(WatchHistory.user_id == user_id)
+    )
+    watched_rows = (await db.execute(watched_q)).all()
+    
+    # show_id -> list of (episode_id, watched_at)
+    show_watched_map = {}
+    for row in watched_rows:
+        show_watched_map.setdefault(row.show_id, []).append((row.episode_id, row.watched_at))
+
     in_progress = []
     for show in shows:
         all_ep_ids = [ep.id for s in show.seasons for ep in s.episodes]
         if not all_ep_ids:
             continue
 
-        watched_result = await db.execute(
-            select(WatchHistory.episode_id).where(
-                WatchHistory.user_id == user_id,
-                WatchHistory.episode_id.in_(all_ep_ids),
-            )
-        )
-        watched_ids = {r.episode_id for r in watched_result}
+        show_watched_entries = show_watched_map.get(show.id, [])
+        watched_ids = {e[0] for e in show_watched_entries}
         watched_count = len(watched_ids)
 
         if watched_count == 0:
@@ -258,6 +268,8 @@ async def get_in_progress(user_id: int, db: AsyncSession, include_dropped: bool 
 
         if remaining == 0:
             continue  # Fully complete
+
+        last_watched_at = max(e[1] for e in show_watched_entries) if show_watched_entries else None
 
         remaining_mins = sum(
             ep.runtime_mins or 45
@@ -272,7 +284,6 @@ async def get_in_progress(user_id: int, db: AsyncSession, include_dropped: bool 
         
         next_ep_data = None
         if next_ep_model:
-            from app.schemas.tv_show import EpisodeResponse
             # Find which season this ep belongs to for season_number
             ep_season = next((s for s in show.seasons if s.id == next_ep_model.season_id), None)
             
@@ -300,6 +311,8 @@ async def get_in_progress(user_id: int, db: AsyncSession, include_dropped: bool 
             remaining_hours=round(remaining_mins / 60, 1),
             progress_pct=progress_pct,
             next_episode=next_ep_data,
+            last_watched_at=last_watched_at
         ))
 
-    return sorted(in_progress, key=lambda s: s.remaining_episodes)
+    # Sort by last_watched_at DESC (most recently watched first)
+    return sorted(in_progress, key=lambda s: s.last_watched_at or datetime.min, reverse=True)

@@ -1,6 +1,7 @@
 from sqlalchemy import Integer, String, DateTime, ForeignKey, CheckConstraint, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
+from datetime import datetime, timezone
 from typing import Optional
 
 from app.database import Base
@@ -21,7 +22,12 @@ class WatchHistory(Base):
     movie_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("movies.id", ondelete="CASCADE"), nullable=True, index=True)
     episode_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("episodes.id", ondelete="CASCADE"), nullable=True, index=True)
 
-    watched_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    watched_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True), 
+        default=lambda: datetime.now(timezone.utc), 
+        server_default=func.now(), 
+        index=True
+    )
     rating: Mapped[Optional[int]] = mapped_column(Integer)  # 1–5, validated at schema layer
     note: Mapped[Optional[str]] = mapped_column(Text)
 
