@@ -68,18 +68,34 @@ async def _sync_one_show(show_id: int) -> None:
             sn = s_data["season_number"]
             if sn in existing_seasons:
                 season = existing_seasons[sn]
-                # Add any new episodes
-                existing_ep_nums = {ep.episode_number for ep in season.episodes}
+                # Update existing season metadata
+                season.name = s_data.get("name", season.name)
+                season.episode_count = len(s_data.get("episodes", []))
+                new_air_date = _parse_date(s_data.get("air_date"))
+                if new_air_date:
+                    season.air_date = new_air_date
+
+                # Map existing episodes
+                existing_eps = {ep.episode_number: ep for ep in season.episodes}
                 for ep_data in s_data.get("episodes", []):
-                    if ep_data["episode_number"] not in existing_ep_nums:
+                    ep_num = ep_data["episode_number"]
+                    if ep_num in existing_eps:
+                        # Update existing episode
+                        episode = existing_eps[ep_num]
+                        episode.name = ep_data.get("name", episode.name)
+                        episode.runtime_mins = ep_data.get("runtime_mins") or episode.runtime_mins
+                        ep_air_date = _parse_date(ep_data.get("air_date"))
+                        if ep_air_date:
+                            episode.air_date = ep_air_date
+                    else:
+                        # Add new episode
                         db.add(Episode(
                             season_id=season.id,
-                            episode_number=ep_data["episode_number"],
+                            episode_number=ep_num,
                             name=ep_data.get("name"),
                             runtime_mins=ep_data.get("runtime_mins", 45),
                             air_date=_parse_date(ep_data.get("air_date")),
                         ))
-                season.episode_count = len(s_data.get("episodes", []))
             else:
                 # New season
                 season = Season(
