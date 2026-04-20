@@ -1,6 +1,6 @@
-# Deployment Guide
+# Full Deployment Guide
 
-> Step-by-step instructions to deploy the Personal Media Tracker on a Linux VPS.
+> Step-by-step instructions to deploy CineTrack on a Linux VPS using Docker.
 
 ---
 
@@ -8,226 +8,158 @@
 
 | Requirement | Notes |
 |-------------|-------|
-| Linux VPS | Ubuntu 22.04 LTS recommended |
+| Linux VPS | Ubuntu 22.04+ recommended |
 | Docker Engine ≥ 24 | [Install guide](https://docs.docker.com/engine/install/) |
-| Docker Compose v2 | Included with Docker Desktop; `docker compose` (not `docker-compose`) |
-| Nginx (host) | `sudo apt install nginx` |
-| Certbot | `sudo apt install certbot python3-certbot-nginx` |
+| Docker Compose v2 | `docker compose` |
 | TMDB API Key | Free at [themoviedb.org](https://www.themoviedb.org/settings/api) |
-| Domain name | Optional, but required for HTTPS |
+| Domain name | Required for HTTPS |
 
 ---
 
-## Step 1 — Copy Files to the Server
+## Step 1 — Project Setup
+
+Create a directory for CineTrack and set up your environment variables:
 
 ```bash
-# From your local machine
-scp -r ./mediaTracker user@your-server-ip:~/mediatracker
-
-# Or clone from git if you push it to a repo
-ssh user@your-server-ip
-git clone <your-repo-url> ~/mediatracker
+mkdir -p ~/cinetrack
+cd ~/cinetrack
+nano .env
 ```
 
----
-
-## Step 2 — Configure Environment Variables
-
-```bash
-cd ~/mediatracker
-cp backend/.env.example backend/.env
-nano backend/.env
-```
-
-**Edit these required values:**
+**Required values for `.env`:**
 
 ```dotenv
-# Required
-SECRET_KEY=<generate with: python3 -c "import secrets; print(secrets.token_hex(32))">
-TMDB_API_KEY=<your_tmdb_api_key>
+# Generate a secure key with: python3 -c "import secrets; print(secrets.token_hex(32))"
+SECRET_KEY=your_generated_secret_key
 
-# Required for CORS — use your actual domain or server IP
-ALLOWED_ORIGINS=https://your-domain.com,http://your-server-ip
+# Your TMDB API Key
+TMDB_API_KEY=your_tmdb_api_key
 
-# Optional — change default 30 day token lifetime
-ACCESS_TOKEN_EXPIRE_MINUTES=43200
-
-# Leave as-is for SQLite
-DATABASE_URL=sqlite+aiosqlite:////data/mediatracker.db
+# Optional: SQLite Database path (defaults to /data/mediatracker.db)
+# DATABASE_URL=sqlite+aiosqlite:////data/mediatracker.db
 ```
 
 ---
 
-## Step 3 — Build and Start the Container
+## Step 2 — Deploy with Docker Compose
+
+Create a `docker-compose.yml` file:
 
 ```bash
-cd ~/mediatracker
-docker compose up -d --build
+nano docker-compose.yml
 ```
 
-Verify the container is running:
+Paste the following configuration:
+
+```yaml
+services:
+  cinetrack:
+    image: ghcr.io/<your-username>/cinetrack:latest
+    ports:
+      - "127.0.0.1:8020:80" # Bind to localhost to match host Nginx proxy
+    volumes:
+      - cinetrack-data:/data
+    env_file: .env
+    restart: unless-stopped
+
+volumes:
+  cinetrack-data:
+```
+
+Start the container:
+```bash
+docker compose up -d
+```
+
+Verify it's running:
 ```bash
 docker compose ps
-docker compose logs backend --tail=50
-```
-
-Test the health endpoint:
-```bash
 curl http://localhost:8020/api/health
-# Expected: {"status":"ok"}
 ```
 
 ---
 
-## Step 4 — Create Your Admin User
+## Step 3 — Create Your Admin User
+
+Run the admin creation script inside the running container:
 
 ```bash
-docker compose exec backend python scripts/create_user.py \
+docker compose exec cinetrack python scripts/create_user.py \
   --username admin \
-  --password "YourVerySecurePassword123!"
-```
-
-You can create additional users with the same command.
-
----
-
-## Step 5 — Build and Deploy the Frontend
-
-The Vue frontend must be built and served as static files by Nginx.
-
-```bash
-cd ~/mediatracker/frontend
-npm install
-npm run build
-```
-
-Copy the built files to the Nginx web root:
-```bash
-sudo mkdir -p /var/www/mediatracker
-sudo cp -r dist/* /var/www/mediatracker/
+  --password "YourSecurePassword123!"
 ```
 
 ---
 
-## Step 6 — Configure Nginx
+## Step 4 — Host Nginx & SSL (Recommended)
 
-Copy the included configuration:
+If you have a domain, use Nginx on your host machine to handle SSL and proxy traffic to the Docker container.
+
+### Install Nginx and Certbot
 ```bash
-sudo cp ~/mediatracker/nginx/mediatracker.conf /etc/nginx/sites-available/mediatracker
-sudo ln -s /etc/nginx/sites-available/mediatracker /etc/nginx/sites-enabled/
+sudo apt update
+sudo apt install nginx certbot python3-certbot-nginx
 ```
 
-Edit the config to set your domain:
+### Configure Nginx
 ```bash
-sudo nano /etc/nginx/sites-available/mediatracker
-# Replace 'your-domain.com' with your actual domain
+sudo nano /etc/nginx/sites-available/cinetrack
 ```
-
-The default `nginx/mediatracker.conf` proxies `/api/*` to the backend and serves `/` as the Vue SPA:
 
 ```nginx
 server {
     listen 80;
-    server_name your-domain.com;
-
-    # Vue SPA — serve index.html for all non-API routes
-    root /var/www/mediatracker;
-    index index.html;
+    server_name cinetrack.duckdns.org www.cinetrack.duckdns.org;
 
     location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    # Proxy API calls to the FastAPI backend container
-    location /api/ {
-        proxy_pass http://localhost:8020;
+        proxy_pass http://127.0.0.1:8020;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Required for large Trakt.tv JSON imports
+        client_max_body_size 75M;
     }
 }
 ```
 
-Test and reload Nginx:
+Enable the site and reload Nginx:
 ```bash
+sudo ln -s /etc/nginx/sites-available/cinetrack /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
----
-
-## Step 7 — Enable HTTPS with Certbot
-
+### Obtain SSL Certificate
 ```bash
-sudo certbot --nginx -d your-domain.com
-```
-
-Certbot will automatically:
-- Obtain an SSL certificate from Let's Encrypt
-- Modify the Nginx config to redirect HTTP → HTTPS
-- Set up auto-renewal
-
-Test auto-renewal:
-```bash
-sudo certbot renew --dry-run
+sudo certbot --nginx -d cinetrack.duckdns.org -d www.cinetrack.duckdns.org
 ```
 
 ---
 
-## Updating the Application
+## Updating CineTrack
+
+To update to the latest version:
 
 ```bash
-cd ~/mediatracker
-
-# Pull new code (if using git)
-git pull
-
-# Rebuild and restart backend
-docker compose up -d --build
-
-# Rebuild frontend
-cd frontend && npm run build && sudo cp -r dist/* /var/www/mediatracker/
+cd ~/cinetrack
+docker compose pull
+docker compose up -d
 ```
 
-Database migrations run automatically on container start (`alembic upgrade head` is in the Docker CMD).
+Database migrations are automatically applied on container startup.
 
 ---
 
-## Useful Operations
+## Useful Commands
 
-### View logs
-```bash
-docker compose logs -f backend
-```
-
-### Backup the database
-```bash
-docker compose exec backend sh -c "sqlite3 /data/mediatracker.db .dump" > backup_$(date +%Y%m%d).sql
-```
-
-### Restore from backup
-```bash
-cat backup_20240101.sql | docker compose exec -T backend sqlite3 /data/mediatracker.db
-```
-
-### Manually trigger background sync
-```bash
-curl -H "Authorization: Bearer <your_token>" http://localhost:8020/api/admin/sync/trigger
-```
-
-### Change a user's password
-Currently requires recreating the user. An admin password-change endpoint is a planned future enhancement.
-
----
-
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| Container won't start | Check `docker compose logs backend` — usually a missing `.env` var |
-| 401 on all API calls | Token expired; log in again to get a new one |
-| CORS errors | Add your origin to `ALLOWED_ORIGINS` in `.env` and restart container |
-| Images not loading | Check `TMDB_API_KEY` is valid |
-| Nginx 502 Bad Gateway | Backend container not running; check `docker compose ps` |
-| Frontend shows blank page after update | Clear browser cache or do a hard reload (`Ctrl+Shift+R`) |
+| Action | Command |
+| :--- | :--- |
+| **View Logs** | `docker compose logs -f` |
+| **Restart** | `docker compose restart` |
+| **Shell Access** | `docker compose exec -it cinetrack bash` |
+| **Database Backup** | `docker compose exec cinetrack sqlite3 /data/mediatracker.db .dump > backup.sql` |

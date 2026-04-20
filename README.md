@@ -1,70 +1,80 @@
-# Personal Media Tracker
+# CineTrack
 
-A self-hosted, lightweight alternative to Trakt.tv, built with FastAPI, Vue 3, and SQLite.
+A self-hosted, lightweight personal media tracker, built with FastAPI, Vue 3, and SQLite.
 
 ## Features
 
 - **Watch Tracking:** Keep track of movies and TV episodes you've watched.
 - **In-Progress Series:** Automatically track and sort TV series that you are currently watching.
-- **Statistics & History:** View your watch history timeline and global statistics (hours watched, episodes watched, etc.).
-- **TMDB Integration:** Seamlessly search and import metadata for movies and TV shows from The Movie Database (TMDB).
-- **Automated Sync:** Background tasks automatically fetch new episodes and season updates for returning series.
+- **Statistics & History:** View your watch history timeline and global statistics.
+- **TMDB Integration:** Seamlessly search and import metadata from The Movie Database (TMDB).
+- **Automated Sync:** Background tasks automatically fetch new episodes and season updates.
 - **Trakt.tv Import:** Easily migrate your watch history from Trakt.tv using a JSON export.
 
 ## Architecture
 
 - **Backend:** Python + FastAPI + SQLAlchemy 2.0 (Async)
-- **Database:** SQLite using `aiosqlite` (single-file database, perfect for personal self-hosting)
+- **Database:** SQLite using `aiosqlite`
 - **Frontend:** Vue 3 + Tailwind CSS + Vite
-- **Infrastructure:** Docker & Docker Compose with Nginx as a reverse proxy
-
-## Prerequisites
-
-- Linux Server (VPS or local machine)
-- Docker & Docker Compose installed
-- A free TMDB API Key (from themoviedb.org)
-- Domain name pointing to your server IP (optional, for SSL/Nginx)
+- **Infrastructure:** Unified Docker container with Nginx serving the frontend and proxying the backend.
 
 ## Deployment Instructions
 
-1. **Clone the repository:**
-   ```bash
-   git clone <your-repo-url> mediatracker
-   cd mediatracker
-   ```
+### 1. Configure Environment Variables
+Create a `.env` file in the project root:
+```bash
+SECRET_KEY=your_secure_random_string
+TMDB_API_KEY=your_tmdb_api_key
+```
 
-2. **Configure Environment Variables:**
-   ```bash
-   cp backend/.env.example backend/.env
-   # Edit backend/.env and add your TMDB_API_KEY and a secure SECRET_KEY
-   ```
-   **Important:** Update `ALLOWED_ORIGINS` in the `.env` if deploying to a custom domain (e.g., `https://your-domain.com`). By default, it allows `http://localhost:5173` and `http://localhost`.
+### 2. Deploy with Docker
+The recommended way to deploy CineTrack is using the unified Docker image from GitHub Container Registry (GHCR).
 
-3. **Deploy with Docker Compose:**
-   ```bash
-   # This will build the frontend, backend, and start the containers in detached mode
-   docker compose up -d --build
-   ```
+#### Using Docker Compose (Recommended)
+```yaml
+services:
+  cinetrack:
+    image: ghcr.io/<your-username>/cinetrack:latest
+    ports:
+      - "80:80"
+    volumes:
+      - cinetrack-data:/data
+    env_file: .env
+    restart: unless-stopped
+```
 
-4. **Create the Initial Admin User:**
-   ```bash
-   # Execute the CLI script inside the backend container to create your login
-   docker compose exec backend python scripts/create_user.py --username admin --password "YourSecurePassword"
-   ```
+Run with:
+```bash
+docker compose up -d
+```
 
-5. **Nginx Reverse Proxy & SSL (Optional but Recommended):**
-   - The included `nginx/mediatracker.conf` provides a boilerplate for reverse proxying traffic.
-   - Use Certbot (`sudo certbot --nginx`) to automatically obtain and configure SSL certificates for your domain.
+#### Using Docker Run
+```bash
+docker run -d \
+  -p 80:80 \
+  -v cinetrack-data:/data \
+  --env-file .env \
+  --name cinetrack \
+  ghcr.io/<your-username>/cinetrack:latest
+```
 
-## Usage
+### 3. Create the Initial Admin User
+```bash
+docker exec -it cinetrack python scripts/create_user.py --username admin --password "YourSecurePassword"
+```
 
-1. Navigate to `http://localhost` (or your domain).
-2. Log in with the admin credentials you created.
-3. Start searching for movies and TV shows to add to your library!
+## Building from Source
 
-## Migrating from Trakt.tv
+To build and run the unified container locally:
+```bash
+docker build -t cinetrack .
+docker run -d -p 80:80 --env-file .env cinetrack
+```
 
-1. Go to Trakt.tv and request a GDPR Data Export.
-2. Once you receive the zip file, extract it and locate the `.json` files (e.g., `watched_movies.json`, `watched_shows.json`).
-3. In the Media Tracker, navigate to **Settings** -> **Trakt.tv JSON Import**.
-4. Upload your JSON files one by one. The backend will process the files, match the TMDB IDs, and retroactively log your watch history.
+## Pushing to GHCR.io
+
+To build and push your own image to GHCR:
+```bash
+docker build -t ghcr.io/<your-username>/cinetrack:latest .
+docker push ghcr.io/<your-username>/cinetrack:latest
+```

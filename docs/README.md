@@ -8,9 +8,11 @@
 | 01 | [decisions.md](./01-decisions.md) | All product, architecture, and technical decisions with rationale |
 | 02 | [system-design.md](./02-system-design.md) | Full system architecture, backend layers, DB schema, security model |
 | 03 | [api-reference.md](./03-api-reference.md) | Every API endpoint with request/response formats |
-| 04 | [deployment-guide.md](./04-deployment-guide.md) | Step-by-step VPS deployment with Nginx, Docker, and Certbot |
-| 05 | [ui-design.md](./05-ui-design.md) | Approved UI design spec — colours, typography, per-view layouts |
-| 06 | [testing.md](./06-testing.md) | How to run tests, test coverage map, fixtures reference |
+| 04 | [deployment-guide.md](./04-deployment-guide.md) | Full VPS deployment with Nginx, Docker, and SSL |
+| 05 | [ui-design.md](./05-ui-design.md) | Approved UI design spec — colors, typography, layouts |
+| 06 | [testing.md](./06-testing.md) | How to run tests, fixtures, and coverage |
+| 07 | [deployment-ubuntu.md](./07-deployment-ubuntu.md) | Bare-metal Ubuntu deployment (Legacy/Non-Docker) |
+| 08 | [docker-deployment.md](./08-docker-deployment.md) | Detailed unified Docker container and GHCR guide |
 
 ---
 

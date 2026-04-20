@@ -1,21 +1,21 @@
-# Software Requirements Specification (SRS): Personal Media Tracker
+# Software Requirements Specification (SRS): CineTrack
 
 ## 1. Introduction
 ### 1.1 Purpose
-This document outlines the software requirements for a custom, web-based personal media tracking application. The system will allow the user to catalog, search, and track their viewing history for movies and television series, serving as a customized alternative to third-party platforms like Trakt.tv.
+This document outlines the software requirements for CineTrack, a custom, web-based personal media tracking application. The system allows users to catalog, search, and track their viewing history for movies and television series, serving as a lightweight, self-hosted alternative to platforms like Trakt.tv.
 
 ### 1.2 Scope
-The application is initially designed for single-user, personal use but will be architected with multi-tenant abstractions to support future public scaling. It will utilize The Movie Database (TMDB) API for all metadata and image retrieval. TV tracking is strictly limited to standard numbered seasons and episodes.
+CineTrack is designed for personal use with a focus on data privacy and minimal resource consumption. It utilizes The Movie Database (TMDB) API for metadata and image retrieval.
 
 ## 2. Overall Description
 ### 2.1 User Characteristics
-The primary user requires a streamlined, data-rich interface free of unnecessary social features or cluttered UI updates. The user has administrative access to a Linux Virtual Private Server (VPS) for deployment.
+The primary user requires a streamlined, data-rich interface free of social features or cluttered UI. The user has administrative access to a Linux environment for deployment.
 
 ### 2.2 Operating Environment
-* **Deployment:** Linux VPS.
-* **Containerization:** Docker (for isolated application environments).
-* **Web Server:** Nginx (acting as a reverse proxy and serving static frontend assets).
-* **Client:** Modern desktop and mobile web browsers.
+* **Deployment:** Docker-compatible environment (VPS, Home Server, etc.).
+* **Containerization:** Unified Docker image containing both frontend and backend.
+* **Web Server:** Internal Nginx (proxying to FastAPI and serving static assets).
+* **Client:** Modern web browsers.
 
 ## 3. Functional Requirements
 ### 3.1 Media Discovery & Addition
@@ -66,7 +66,7 @@ To meet the requirements for lightweight performance and rapid API development, 
 * **Infrastructure:** Linux VPS, Nginx, Docker, Cron (for scheduled background tasks)
 
 ## 6. System Architecture Summary
-1.  **Nginx** listens on ports 80/443, handles SSL, and serves the static compiled **Vue.js** frontend.
-2.  API requests from the frontend are routed by Nginx to the **FastAPI** backend running inside a **Docker** container.
-3.  **FastAPI** queries the **SQLite** database via **SQLAlchemy** to construct user dashboards.
-4.  A system-level **cron job** triggers a protected backend endpoint twice a week to synchronize returning TV show data with **TMDB**.
+1.  **Unified Docker Container:** A single image contains both the **Nginx** web server and the **FastAPI** backend.
+2.  **Internal Nginx:** Serves the static **Vue.js** frontend and proxies `/api` requests to the local backend process.
+3.  **FastAPI Backend:** Handles business logic, TMDB integration, and database operations.
+4.  **SQLite Database:** Persistent storage for user data and watch history, stored in a Docker volume.
