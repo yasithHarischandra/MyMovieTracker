@@ -29,6 +29,12 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/upcoming',
+      name: 'upcoming',
+      component: () => import('@/views/UpcomingView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/history',
       name: 'history',
       component: () => import('@/views/HistoryView.vue'),

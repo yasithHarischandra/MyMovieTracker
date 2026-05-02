@@ -328,3 +328,43 @@ async def get_in_progress(user_id: int, db: AsyncSession, include_dropped: bool 
 
     # Sort by last_watched_at DESC (most recently watched first)
     return sorted(in_progress, key=lambda s: s.last_watched_at or datetime.min, reverse=True)
+
+
+async def get_upcoming_episodes(
+    user_id: int, db: AsyncSession, start_date: date_type, end_date: date_type, include_dropped: bool = False
+) -> list[dict]:
+    # Query episodes within the date range for shows owned by the user
+    query = (
+        select(Episode, Season, TvShow)
+        .join(Season, Episode.season_id == Season.id)
+        .join(TvShow, Season.show_id == TvShow.id)
+    )
+    
+    if not include_dropped:
+        query = query.where(TvShow.is_dropped == False)
+        
+    query = query.where(
+        TvShow.user_id == user_id,
+        Episode.air_date >= start_date,
+        Episode.air_date <= end_date,
+    ).order_by(Episode.air_date)
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    upcoming = []
+    for ep, season, show in rows:
+        upcoming.append({
+            "show_id": show.id,
+            "show_name": show.name,
+            "show_poster_path": show.poster_path,
+            "episode_id": ep.id,
+            "season_number": season.season_number,
+            "episode_number": ep.episode_number,
+            "episode_name": ep.name,
+            "air_date": ep.air_date,
+            "runtime_mins": ep.runtime_mins,
+            "is_dropped": show.is_dropped,
+        })
+
+    return upcoming

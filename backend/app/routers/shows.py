@@ -1,10 +1,12 @@
+from datetime import date, datetime
+import calendar
 from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db, get_current_user
 from app.models.user import User
 from app.models.season import Season
-from app.schemas.tv_show import ShowAddRequest, ShowResponse, SeasonResponse, EpisodeResponse, InProgressShow
+from app.schemas.tv_show import ShowAddRequest, ShowResponse, SeasonResponse, EpisodeResponse, InProgressShow, UpcomingEpisodeResponse
 from app.schemas.watch import WatchCreate, WatchHistoryEntry
 from app.services import show_service
 
@@ -33,6 +35,22 @@ async def get_in_progress(
     db: AsyncSession = Depends(get_db),
 ):
     return await show_service.get_in_progress(current_user.id, db, include_dropped=include_dropped)
+@router.get("/upcoming", response_model=list[UpcomingEpisodeResponse])
+async def get_upcoming(
+    start_date: date = Query(None, description="Start date in YYYY-MM-DD"),
+    end_date: date = Query(None, description="End date in YYYY-MM-DD"),
+    include_dropped: bool = Query(False, description="Include dropped shows"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not start_date or not end_date:
+        # Default to current month if dates not provided
+        today = date.today()
+        start_date = date(today.year, today.month, 1)
+        _, last_day = calendar.monthrange(today.year, today.month)
+        end_date = date(today.year, today.month, last_day)
+
+    return await show_service.get_upcoming_episodes(current_user.id, db, start_date, end_date, include_dropped)
 
 
 @router.get("/{show_id}", response_model=ShowResponse)

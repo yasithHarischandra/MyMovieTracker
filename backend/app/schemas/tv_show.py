@@ -97,3 +97,18 @@ class InProgressShow(BaseModel):
         if v.tzinfo is None:
             v = v.replace(tzinfo=timezone.utc)
         return v.isoformat().replace("+00:00", "Z")
+
+
+class UpcomingEpisodeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    show_id: int
+    show_name: str
+    show_poster_path: Optional[str] = None
+    episode_id: int
+    season_number: int
+    episode_number: int
+    episode_name: Optional[str] = None
+    air_date: date
+    runtime_mins: Optional[int] = None
+    is_dropped: bool = False

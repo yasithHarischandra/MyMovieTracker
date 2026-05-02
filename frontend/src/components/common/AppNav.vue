@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { PhFilmStrip, PhMagnifyingGlass, PhHourglass, PhClockCounterClockwise, PhSignOut, PhUserCircle, PhGear } from '@phosphor-icons/vue'
+import { PhFilmStrip, PhMagnifyingGlass, PhHourglass, PhClockCounterClockwise, PhSignOut, PhUserCircle, PhGear, PhCalendar } from '@phosphor-icons/vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -12,6 +12,7 @@ const navLinks = [
   { name: 'Dashboard', to: { name: 'dashboard' }, icon: PhFilmStrip },
   { name: 'Search', to: { name: 'search' }, icon: PhMagnifyingGlass },
   { name: 'In Progress', to: { name: 'in-progress' }, icon: PhHourglass },
+  { name: 'Upcoming', to: { name: 'upcoming' }, icon: PhCalendar },
   { name: 'History', to: { name: 'history' }, icon: PhClockCounterClockwise },
   { name: 'Settings', to: { name: 'settings' }, icon: PhGear },
 ]
