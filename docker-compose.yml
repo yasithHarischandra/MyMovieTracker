@@ -1,15 +1,16 @@
 services:
-  backend:
-    build: ./backend
+  cinetrack:
+    build: .
     ports:
-      - "8020:8020"
+      - "127.0.0.1:8020:80"
     volumes:
       - mediatracker-data:/data
-    env_file:
-      - ./backend/.env
+    environment:
+      - TMDB_API_KEY=${TMDB_API_KEY}
+      - SECRET_KEY=${SECRET_KEY}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8020/api/health')"]
+      test: ["CMD", "curl", "-f", "http://localhost/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3

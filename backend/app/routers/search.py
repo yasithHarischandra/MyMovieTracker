@@ -80,10 +80,16 @@ async def search_shows(
         if show:
             # Find watched episodes
             all_ep_ids = [ep.id for s in show.seasons for ep in s.episodes]
-            total_eps = len(all_ep_ids)
+
+            today = datetime.now().date()
+            aired_ep_ids = {
+                ep.id for s in show.seasons for ep in s.episodes 
+                if ep.air_date is None or ep.air_date <= today
+            }
+            total_aired = len(aired_ep_ids)
             watched_ids = set()
-            
-            if total_eps > 0:
+
+            if total_aired > 0 or len(all_ep_ids) > 0:
                 watched_result = await db.execute(
                     select(WatchHistory.episode_id).where(
                         WatchHistory.user_id == current_user.id,
@@ -91,16 +97,17 @@ async def search_shows(
                     )
                 )
                 watched_ids = {row.episode_id for row in watched_result}
-                
-                watched_count = len(watched_ids)
-                if watched_count == 0:
+
+                watched_aired_count = len(watched_ids & aired_ep_ids)
+                if watched_aired_count == 0:
                     status_label = None
-                elif watched_count < total_eps:
+                elif watched_aired_count < total_aired:
                     status_label = "In Progress"
                 else:
                     status_label = "Complete"
-            
+
             next_ep_model = show_service.find_next_episode(show, watched_ids)
+
             if next_ep_model:
                 ep_season = next((s for s in show.seasons if s.id == next_ep_model.season_id), None)
                 next_ep_data = EpisodeResponse(

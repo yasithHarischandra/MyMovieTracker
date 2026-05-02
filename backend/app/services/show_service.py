@@ -216,11 +216,14 @@ async def drop_show(show_id: int, user_id: int, db: AsyncSession) -> TvShow:
 
 
 def find_next_episode(show: TvShow, watched_ids: set[int]) -> Optional[Episode]:
-    """Finds the first unwatched episode in a show."""
+    """Finds the first unwatched episode in a show that has already aired."""
+    today = datetime.now().date()
     for s in sorted(show.seasons, key=lambda x: x.season_number):
         for ep in sorted(s.episodes, key=lambda x: x.episode_number):
             if ep.id not in watched_ids:
-                return ep
+                # Only return if it has aired (or air_date is unknown)
+                if ep.air_date is None or ep.air_date <= today:
+                    return ep
     return None
 
 
@@ -251,6 +254,7 @@ async def get_in_progress(user_id: int, db: AsyncSession, include_dropped: bool 
         show_watched_map.setdefault(row.show_id, []).append((row.episode_id, row.watched_at))
 
     in_progress = []
+    today = datetime.now().date()
     for show in shows:
         all_ep_ids = [ep.id for s in show.seasons for ep in s.episodes]
         if not all_ep_ids:
@@ -263,21 +267,29 @@ async def get_in_progress(user_id: int, db: AsyncSession, include_dropped: bool 
         if watched_count == 0:
             continue  # Not started
 
-        total = len(all_ep_ids)
-        remaining = total - watched_count
+        # Aired episodes for progress calculation
+        aired_episodes = [
+            ep for s in show.seasons for ep in s.episodes 
+            if ep.air_date is None or ep.air_date <= today
+        ]
+        aired_ep_ids = {ep.id for ep in aired_episodes}
+        total_aired = len(aired_episodes)
+        
+        # We only care about watched episodes that have actually aired
+        watched_aired_count = len(watched_ids & aired_ep_ids)
+        remaining_aired = total_aired - watched_aired_count
 
-        if remaining == 0:
-            continue  # Fully complete
+        if remaining_aired <= 0:
+            continue  # Fully complete with all aired episodes
 
         last_watched_at = max(e[1] for e in show_watched_entries) if show_watched_entries else None
 
         remaining_mins = sum(
             ep.runtime_mins or 45
-            for s in show.seasons
-            for ep in s.episodes
+            for ep in aired_episodes
             if ep.id not in watched_ids
         )
-        progress_pct = round((watched_count / total) * 100, 1) if total > 0 else 0
+        progress_pct = round((watched_aired_count / total_aired) * 100, 1) if total_aired > 0 else 0
 
         # Find next episode
         next_ep_model = find_next_episode(show, watched_ids)
@@ -305,9 +317,9 @@ async def get_in_progress(user_id: int, db: AsyncSession, include_dropped: bool 
             poster_path=show.poster_path,
             status=show.status,
             is_dropped=show.is_dropped,
-            total_episodes=total,
-            watched_episodes=watched_count,
-            remaining_episodes=remaining,
+            total_episodes=total_aired,
+            watched_episodes=watched_aired_count,
+            remaining_episodes=remaining_aired,
             remaining_hours=round(remaining_mins / 60, 1),
             progress_pct=progress_pct,
             next_episode=next_ep_data,

@@ -88,3 +88,5 @@ The unified image uses a multi-stage build:
 The Nginx configuration inside the container:
 - Serves static files for the frontend.
 - Proxies `/api/` requests to the local backend process on port `8020`.
+
+

@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, String, Date, ForeignKey
+from sqlalchemy import Integer, String, Date, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import Optional
 
@@ -7,6 +7,7 @@ from app.database import Base
 
 class Season(Base):
     __tablename__ = "seasons"
+    __table_args__ = (UniqueConstraint("show_id", "season_number", name="uq_season_show_number"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     show_id: Mapped[int] = mapped_column(Integer, ForeignKey("tv_shows.id", ondelete="CASCADE"), nullable=False, index=True)

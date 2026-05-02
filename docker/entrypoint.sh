@@ -5,6 +5,10 @@ set -e
 
 echo "Starting MediaTracker..."
 
+# Run data correction for duplicates
+echo "Running data correction script..."
+python -m scripts.fix_duplicates
+
 # Run database migrations
 echo "Running database migrations..."
 alembic upgrade head

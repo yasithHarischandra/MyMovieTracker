@@ -62,6 +62,7 @@ async def get_dashboard_stats(user_id: int, db: AsyncSession) -> DashboardStats:
     remaining_mins = 0
     total_eps = 0
     
+    today = datetime.now().date()
     for show in shows:
         all_eps = [ep for s in show.seasons for ep in s.episodes]
         if not all_eps:
@@ -77,16 +78,20 @@ async def get_dashboard_stats(user_id: int, db: AsyncSession) -> DashboardStats:
             total_eps += w
             continue
 
-        # Active shows contribute all their episodes to the total
-        total_eps += len(all_eps)
+        # Active shows contribute all their episodes to the total, 
+        # but we only count those that have aired (or have no air date)
+        aired_eps = [ep for ep in all_eps if ep.air_date is None or ep.air_date <= today]
+        aired_ep_ids = {ep.id for ep in aired_eps}
+        total_eps += len(aired_eps)
 
-        # In-progress means started but not finished
-        if 0 < w < len(all_ep_ids):
+        # In-progress means started but not finished (counting only aired episodes)
+        w_aired = aired_ep_ids & watched_ep_ids
+        if 0 < len(w_aired) < len(aired_ep_ids):
             in_progress_count += 1
             
-        # Compute remaining stats for ALL non-dropped shows
-        if w < len(all_ep_ids):
-            for ep in all_eps:
+        # Compute remaining stats for ALL non-dropped shows (counting only aired episodes)
+        if len(w_aired) < len(aired_ep_ids):
+            for ep in aired_eps:
                 if ep.id not in watched_ep_ids:
                     remaining_eps += 1
                     remaining_mins += ep.runtime_mins or 45

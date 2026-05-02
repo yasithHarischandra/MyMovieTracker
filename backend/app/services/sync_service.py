@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from sqlalchemy.exc import IntegrityError
 from app.database import AsyncSessionLocal
 from app.models.tv_show import TvShow
 from app.models.season import Season
