@@ -216,13 +216,12 @@ async def drop_show(show_id: int, user_id: int, db: AsyncSession) -> TvShow:
 
 
 def find_next_episode(show: TvShow, watched_ids: set[int]) -> Optional[Episode]:
-    """Finds the first unwatched episode in a show that has already aired."""
+    """Finds the first unwatched episode with a valid air date that has passed."""
     today = datetime.now().date()
     for s in sorted(show.seasons, key=lambda x: x.season_number):
         for ep in sorted(s.episodes, key=lambda x: x.episode_number):
             if ep.id not in watched_ids:
-                # Only return if it has aired (or air_date is unknown)
-                if ep.air_date is None or ep.air_date <= today:
+                if ep.air_date is not None and ep.air_date <= today:
                     return ep
     return None
 
@@ -270,7 +269,7 @@ async def get_in_progress(user_id: int, db: AsyncSession, include_dropped: bool 
         # Aired episodes for progress calculation
         aired_episodes = [
             ep for s in show.seasons for ep in s.episodes 
-            if ep.air_date is None or ep.air_date <= today
+            if ep.air_date is not None and ep.air_date <= today
         ]
         aired_ep_ids = {ep.id for ep in aired_episodes}
         total_aired = len(aired_episodes)

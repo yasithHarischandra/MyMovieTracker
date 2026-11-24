@@ -1,6 +1,28 @@
 import pytest
+from datetime import date, timedelta
+
+from app.models.episode import Episode
+from app.models.season import Season
+from app.models.tv_show import TvShow
+from app.services.show_service import find_next_episode
 
 pytestmark = pytest.mark.asyncio
+
+async def test_find_next_episode_ignores_missing_and_future_air_dates():
+    show = TvShow(
+        tmdb_id=789,
+        user_id=1,
+        name="Future Show",
+    )
+    season = Season(show_id=1, season_number=1)
+    past = Episode(id=1, season_id=1, episode_number=1, name="Past", air_date=date.today() - timedelta(days=1))
+    tba = Episode(id=2, season_id=1, episode_number=2, name="TBA", air_date=None)
+    future = Episode(id=3, season_id=1, episode_number=3, name="Future", air_date=date.today() + timedelta(days=1))
+    season.episodes = [past, tba, future]
+    show.seasons = [season]
+
+    assert find_next_episode(show, set()) is past
+    assert find_next_episode(show, {past.id}) is None
 
 async def test_add_show(auth_client):
     # tmdb_service.get_show_details returns a show + 1 season with 2 eps

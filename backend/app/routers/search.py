@@ -84,7 +84,7 @@ async def search_shows(
             today = datetime.now().date()
             aired_ep_ids = {
                 ep.id for s in show.seasons for ep in s.episodes 
-                if ep.air_date is None or ep.air_date <= today
+                if ep.air_date is not None and ep.air_date <= today
             }
             total_aired = len(aired_ep_ids)
             watched_ids = set()

@@ -67,14 +67,31 @@ async def get_show(
     total_eps = watched_eps = 0
     remaining_mins = 0
 
+    today = date.today()
+    aired_eps = [
+        ep for s in show.seasons for ep in s.episodes
+        if ep.air_date is not None and ep.air_date <= today
+    ]
+    aired_ep_ids = {ep.id for ep in aired_eps}
+
     for s in show.seasons:
         ep_out = []
         s_watched = s_remaining = 0
         s_remaining_mins = 0
+        s_aired_count = 0
         for ep in s.episodes:
-            total_eps += 1
             wh_id = watched_map.get(ep.id)
             is_watched = wh_id is not None
+            if ep.id not in aired_ep_ids:
+                ep_out.append(EpisodeResponse(
+                    id=ep.id, episode_number=ep.episode_number, name=ep.name,
+                    runtime_mins=ep.runtime_mins, air_date=ep.air_date,
+                    watched=is_watched, watch_history_id=wh_id,
+                ))
+                continue
+
+            s_aired_count += 1
+            total_eps += 1
             if is_watched:
                 watched_eps += 1
                 s_watched += 1
@@ -92,7 +109,7 @@ async def get_show(
             episode_count=s.episode_count, air_date=s.air_date,
             watched_count=s_watched, remaining_count=s_remaining,
             remaining_hours=round(s_remaining_mins / 60, 1),
-            is_complete=(s_remaining == 0 and len(s.episodes) > 0),
+            is_complete=(s_aired_count > 0 and s_watched == s_aired_count),
             episodes=ep_out,
         ))
 

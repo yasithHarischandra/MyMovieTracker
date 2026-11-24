@@ -61,6 +61,7 @@ async def get_dashboard_stats(user_id: int, db: AsyncSession) -> DashboardStats:
     remaining_eps = 0
     remaining_mins = 0
     total_eps = 0
+    watched_aired_eps = 0
     
     today = datetime.now().date()
     for show in shows:
@@ -68,24 +69,24 @@ async def get_dashboard_stats(user_id: int, db: AsyncSession) -> DashboardStats:
         if not all_eps:
             continue
             
-        all_ep_ids = {ep.id for ep in all_eps}
-        w_eps = all_ep_ids & watched_ep_ids
-        w = len(w_eps)
-        
-        # If show is dropped, we only count its watched episodes towards total_eps
+        aired_eps = [
+            ep for ep in all_eps
+            if ep.air_date is not None and ep.air_date <= today
+        ]
+        aired_ep_ids = {ep.id for ep in aired_eps}
+        w_aired = aired_ep_ids & watched_ep_ids
+        watched_aired_eps += len(w_aired)
+
+        # If show is dropped, we only count its aired, watched episodes towards total_eps
         # and we don't count it towards in-progress or remaining stats
         if show.is_dropped:
-            total_eps += w
+            total_eps += len(w_aired)
             continue
 
-        # Active shows contribute all their episodes to the total, 
-        # but we only count those that have aired (or have no air date)
-        aired_eps = [ep for ep in all_eps if ep.air_date is None or ep.air_date <= today]
-        aired_ep_ids = {ep.id for ep in aired_eps}
+        # Active shows contribute only episodes with a valid past air date.
         total_eps += len(aired_eps)
 
         # In-progress means started but not finished (counting only aired episodes)
-        w_aired = aired_ep_ids & watched_ep_ids
         if 0 < len(w_aired) < len(aired_ep_ids):
             in_progress_count += 1
             
@@ -96,7 +97,7 @@ async def get_dashboard_stats(user_id: int, db: AsyncSession) -> DashboardStats:
                     remaining_eps += 1
                     remaining_mins += ep.runtime_mins or 45
 
-    completion_pct = round((len(watched_ep_ids) / total_eps) * 100, 1) if total_eps > 0 else 0
+    completion_pct = round((watched_aired_eps / total_eps) * 100, 1) if total_eps > 0 else 0
 
     return DashboardStats(
         movies=MovieStats(
