@@ -21,6 +21,7 @@ frontend/.vite/
 # IDE
 .vscode/
 .idea/
+.vs/
 *.swp
 *.swo
 
@@ -31,3 +32,4 @@ Thumbs.db
 *_error.txt
 *_error_ansi.txt
 sample_trakt_files/
+/package-lock.json
